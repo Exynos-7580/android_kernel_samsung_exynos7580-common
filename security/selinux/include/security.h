@@ -51,11 +51,11 @@
 #define FSCONTEXT_MNT	0x02
 #define ROOTCONTEXT_MNT	0x04
 #define DEFCONTEXT_MNT	0x08
+#define SBLABEL_MNT	0x10
 /* Non-mount related flags */
-#define SE_SBINITIALIZED	0x10
-#define SE_SBPROC		0x20
-#define SBLABEL_MNT	0x40
-#define SE_SBGENFS	0x80
+#define SE_SBINITIALIZED	0x100
+#define SE_SBPROC		0x200
+#define SE_SBGENFS		0x400
 
 #define CONTEXT_STR	"context="
 #define FSCONTEXT_STR	"fscontext="
