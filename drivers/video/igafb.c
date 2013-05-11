@@ -268,7 +268,6 @@ static int igafb_mmap(struct fb_info *info,
 	if (!map_size)
 		return -EINVAL;
 
-	vma->vm_flags |= VM_IO;
 	return 0;
 }
 #endif /* CONFIG_SPARC */
