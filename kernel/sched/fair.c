@@ -2529,7 +2529,7 @@ static void throttle_cfs_rq(struct cfs_rq *cfs_rq)
 	struct sched_entity *se;
 	long task_delta, dequeue = 1;
 
-	se = cfs_rq->tg->se[cpu_of(rq_of(cfs_rq))];
+	se = cfs_rq->tg->se[cpu_of(rq)];
 
 	/* freeze hierarchy runnable averages while throttled */
 	rcu_read_lock();
