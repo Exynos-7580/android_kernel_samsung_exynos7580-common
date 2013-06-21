@@ -1059,8 +1059,6 @@ extern void lease_get_mtime(struct inode *, struct timespec *time);
 extern int generic_setlease(struct file *, long, struct file_lock **);
 extern int vfs_setlease(struct file *, long, struct file_lock **);
 extern int lease_modify(struct file_lock **, int);
-extern void lock_flocks(void);
-extern void unlock_flocks(void);
 #else /* !CONFIG_FILE_LOCKING */
 static inline int fcntl_getlk(struct file *file, struct flock __user *user)
 {
@@ -1189,15 +1187,6 @@ static inline int lease_modify(struct file_lock **before, int arg)
 {
 	return -EINVAL;
 }
-
-static inline void lock_flocks(void)
-{
-}
-
-static inline void unlock_flocks(void)
-{
-}
-
 #endif /* !CONFIG_FILE_LOCKING */
 
 
