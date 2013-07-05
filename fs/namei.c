@@ -554,7 +554,7 @@ static int unlazy_walk(struct nameidata *nd, struct dentry *dentry)
 		 * a reference at this point.
 		 */
 		BUG_ON(!IS_ROOT(dentry) && dentry->d_parent != parent);
-		BUG_ON(!parent->d_count);
+		BUG_ON(!d_count(parent));
 		parent->d_count++;
 		spin_unlock(&dentry->d_lock);
 	}
@@ -3398,7 +3398,7 @@ void dentry_unhash(struct dentry *dentry)
 {
 	shrink_dcache_parent(dentry);
 	spin_lock(&dentry->d_lock);
-	if (dentry->d_count == 1)
+	if (d_count(dentry) == 1)
 		__d_drop(dentry);
 	spin_unlock(&dentry->d_lock);
 }
