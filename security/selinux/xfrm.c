@@ -56,7 +56,7 @@
 atomic_t selinux_xfrm_refcount = ATOMIC_INIT(0);
 
 /*
- * Returns true if an LSM/SELinux context
+ * Returns true if the context is an LSM/SELinux context.
  */
 static inline int selinux_authorizable_ctx(struct xfrm_sec_ctx *ctx)
 {
@@ -66,7 +66,7 @@ static inline int selinux_authorizable_ctx(struct xfrm_sec_ctx *ctx)
 }
 
 /*
- * Returns true if the xfrm contains a security blob for SELinux
+ * Returns true if the xfrm contains a security blob for SELinux.
  */
 static inline int selinux_authorizable_xfrm(struct xfrm_state *x)
 {
@@ -149,8 +149,8 @@ static int selinux_xfrm_delete(struct xfrm_sec_ctx *ctx)
 }
 
 /*
- * LSM hook implementation that authorizes that a flow can use
- * a xfrm policy rule.
+ * LSM hook implementation that authorizes that a flow can use a xfrm policy
+ * rule.
  */
 int selinux_xfrm_policy_lookup(struct xfrm_sec_ctx *ctx, u32 fl_secid, u8 dir)
 {
@@ -257,7 +257,6 @@ static u32 selinux_xfrm_skb_sid_egress(struct sk_buff *skb)
  * LSM hook implementation that checks and/or returns the xfrm sid for the
  * incoming packet.
  */
-
 int selinux_xfrm_decode_session(struct sk_buff *skb, u32 *sid, int ckall)
 {
 	if (skb == NULL) {
@@ -279,8 +278,7 @@ int selinux_xfrm_skb_sid(struct sk_buff *skb, u32 *sid)
 }
 
 /*
- * LSM hook implementation that allocs and transfers uctx spec to
- * xfrm_policy.
+ * LSM hook implementation that allocs and transfers uctx spec to xfrm_policy.
  */
 int selinux_xfrm_policy_alloc(struct xfrm_sec_ctx **ctxp,
 			      struct xfrm_user_sec_ctx *uctx)
@@ -288,10 +286,9 @@ int selinux_xfrm_policy_alloc(struct xfrm_sec_ctx **ctxp,
 	return selinux_xfrm_alloc_user(ctxp, uctx);
 }
 
-
 /*
- * LSM hook implementation that copies security data structure from old to
- * new for policy cloning.
+ * LSM hook implementation that copies security data structure from old to new
+ * for policy cloning.
  */
 int selinux_xfrm_policy_clone(struct xfrm_sec_ctx *old_ctx,
 			      struct xfrm_sec_ctx **new_ctxp)
@@ -383,9 +380,9 @@ void selinux_xfrm_state_free(struct xfrm_state *x)
 	selinux_xfrm_free(x->security);
 }
 
- /*
-  * LSM hook implementation that authorizes deletion of labeled SAs.
-  */
+/*
+ * LSM hook implementation that authorizes deletion of labeled SAs.
+ */
 int selinux_xfrm_state_delete(struct xfrm_state *x)
 {
 	return selinux_xfrm_delete(x->security);
