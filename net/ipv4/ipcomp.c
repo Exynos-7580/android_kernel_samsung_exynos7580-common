@@ -49,7 +49,7 @@ static void ipcomp4_err(struct sk_buff *skb, u32 info)
 
 	if (icmp_hdr(skb)->type == ICMP_DEST_UNREACH) {
 		atomic_inc(&flow_cache_genid);
-		rt_genid_bump(net);
+		rt_genid_bump_ipv4(net);
 
 		ipv4_update_pmtu(skb, net, info, 0, 0, IPPROTO_COMP, 0);
 	} else
