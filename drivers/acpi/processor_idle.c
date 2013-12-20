@@ -950,8 +950,6 @@ static int acpi_processor_setup_cpuidle_cx(struct acpi_processor *pr,
 			break;
 	}
 
-	dev->state_count = count;
-
 	if (!count)
 		return -EINVAL;
 
