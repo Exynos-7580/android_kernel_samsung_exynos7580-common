@@ -110,7 +110,7 @@ int selinux_enforcing;
 static int __init enforcing_setup(char *str)
 {
 	unsigned long enforcing;
-	if (!strict_strtoul(str, 0, &enforcing))
+	if (!kstrtoul(str, 0, &enforcing))
 #ifdef CONFIG_ALWAYS_ENFORCE
 		selinux_enforcing = 1;
 #else
@@ -127,7 +127,7 @@ int selinux_enabled = CONFIG_SECURITY_SELINUX_BOOTPARAM_VALUE;
 static int __init selinux_enabled_setup(char *str)
 {
 	unsigned long enabled;
-	if (!strict_strtoul(str, 0, &enabled))
+	if (!kstrtoul(str, 0, &enabled))
 #ifdef CONFIG_ALWAYS_ENFORCE
 		selinux_enabled = 1;
 #else
