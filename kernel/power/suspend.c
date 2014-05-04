@@ -64,11 +64,13 @@ static void freeze_begin(void)
 
 static void freeze_enter(void)
 {
+	cpuidle_use_deepest_state(true);
 	cpuidle_resume();
 	wakeup_mode_for_irqs(true);
 	wait_event(suspend_freeze_wait_head, suspend_freeze_wake);
 	wakeup_mode_for_irqs(false);
 	cpuidle_pause();
+	cpuidle_use_deepest_state(false);
 }
 
 void freeze_wake(void)
