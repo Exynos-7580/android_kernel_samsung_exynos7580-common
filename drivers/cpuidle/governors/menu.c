@@ -22,7 +22,8 @@
 #include <linux/module.h>
 
 #define BUCKETS 12
-#define INTERVALS 8
+#define INTERVAL_SHIFT 3
+#define INTERVALS (1UL << INTERVAL_SHIFT)
 #define RESOLUTION 1024
 #define DECAY 8
 #define MAX_INTERESTING 50000
@@ -220,7 +221,10 @@ again:
 				max = value;
 		}
 	}
-	do_div(avg, divisor);
+	if (divisor == INTERVALS)
+		avg >>= INTERVAL_SHIFT;
+	else
+		do_div(avg, divisor);
 
 	for (i = 0; i < INTERVALS; i++) {
 		int64_t value = data->intervals[i];
@@ -229,7 +233,11 @@ again:
 			stddev += diff * diff;
 		}
 	}
-	do_div(stddev, divisor);
+	if (divisor == INTERVALS)
+		stddev >>= INTERVAL_SHIFT;
+	else
+		do_div(stddev, divisor);
+
 	stddev = int_sqrt(stddev);
 	/*
 	 * If we have outliers to the upside in our distribution, discard
