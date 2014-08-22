@@ -1041,8 +1041,6 @@ extern void lease_get_mtime(struct inode *, struct timespec *time);
 extern int generic_setlease(struct file *, long, struct file_lock **);
 extern int vfs_setlease(struct file *, long, struct file_lock **);
 extern int lease_modify(struct file_lock **, int);
-extern int lock_may_read(struct inode *, loff_t start, unsigned long count);
-extern int lock_may_write(struct inode *, loff_t start, unsigned long count);
 extern void locks_delete_block(struct file_lock *waiter);
 extern void lock_flocks(void);
 extern void unlock_flocks(void);
@@ -1174,22 +1172,6 @@ static inline int vfs_setlease(struct file *filp, long arg,
 static inline int lease_modify(struct file_lock **before, int arg)
 {
 	return -EINVAL;
-}
-
-static inline int lock_may_read(struct inode *inode, loff_t start,
-				unsigned long len)
-{
-	return 1;
-}
-
-static inline int lock_may_write(struct inode *inode, loff_t start,
-				 unsigned long len)
-{
-	return 1;
-}
-
-static inline void locks_delete_block(struct file_lock *waiter)
-{
 }
 
 static inline void lock_flocks(void)
