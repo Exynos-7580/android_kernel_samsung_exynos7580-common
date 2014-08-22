@@ -1550,7 +1550,7 @@ static int do_fcntl_add_lease(unsigned int fd, struct file *filp, long arg)
 	if (!fasync_insert_entry(fd, filp, &ret->fl_fasync, new))
 		new = NULL;
 
-	error = __f_setown(filp, task_pid(current), PIDTYPE_PID, 0);
+	__f_setown(filp, task_pid(current), PIDTYPE_PID, 0);
 	unlock_flocks();
 
 out_free_fasync:
