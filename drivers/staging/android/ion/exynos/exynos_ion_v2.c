@@ -15,6 +15,7 @@
 #include <linux/smc.h>
 #include <linux/genalloc.h>
 #include <linux/exynos_ion.h>
+#include <linux/show_mem_notifier.h>
 
 #include "../ion.h"
 #include "../ion_priv.h"
@@ -45,6 +46,17 @@ static struct ion_platform_heap ion_noncontig_heap = {
 };
 
 static struct exynos_ion_platform_heap plat_heaps[ION_NUM_HEAPS];
+
+static int exynos_ion_lowmem_notifier(struct notifier_block *nb,
+				      unsigned long action, void *data)
+{
+	show_ion_usage(ion_exynos);
+	return 0;
+}
+
+static struct notifier_block exynos_ion_nb = {
+	.notifier_call = exynos_ion_lowmem_notifier,
+};
 
 static int __find_platform_heap_id(unsigned int heap_id)
 {
@@ -669,6 +681,8 @@ static int __init exynos_ion_probe(struct platform_device *pdev)
 	}
 
 	platform_set_drvdata(pdev, ion_exynos);
+
+	show_mem_notifier_register(&exynos_ion_nb);
 
 	ret = exynos_ion_create_cma_class();
 	if (ret)

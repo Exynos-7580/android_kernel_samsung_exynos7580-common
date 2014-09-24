@@ -222,6 +222,7 @@ static inline int ion_exynos_contig_heap_isolate(int region_id)
 
 #if defined(CONFIG_ION_EXYNOS)
 int init_exynos_ion_contig_heap(void);
+void show_ion_usage(struct ion_device *dev);
 #else
 static inline int fdt_init_exynos_ion(void)
 {
