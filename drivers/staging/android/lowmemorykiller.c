@@ -41,6 +41,7 @@
 #include <linux/rcupdate.h>
 #include <linux/notifier.h>
 #include <linux/delay.h>
+#include <linux/show_mem_notifier.h>
 
 #define CREATE_TRACE_POINTS
 #include "trace/lowmemorykiller.h"
@@ -224,6 +225,13 @@ static unsigned long lowmem_scan(struct shrinker *s, struct shrink_control *sc)
 			     cache_size, cache_limit,
 			     min_score_adj,
 			     free);
+
+		if (lowmem_debug_level >= 2 && selected_oom_score_adj == 0) {
+			show_mem(SHOW_MEM_FILTER_NODES);
+			dump_tasks(NULL, NULL);
+			show_mem_call_notifiers();
+		}
+
 		lowmem_deathpending_timeout = jiffies + HZ;
 		/*
 		 * FIXME: lowmemorykiller shouldn't abuse global OOM killer
