@@ -2774,6 +2774,15 @@ static const struct mmc_fixup blk_fixups[] =
 		  MMC_QUIRK_LONG_READ_TIME),
 
 	/*
+	 * Some Samsung MMC cards need longer data read timeout than
+	 * indicated in CSD.
+	 */
+	MMC_FIXUP("Q7XSAB", CID_MANFID_SAMSUNG, 0x100, add_quirk_mmc,
+		  MMC_QUIRK_LONG_READ_TIME),
+	MMC_FIXUP("Q72SMB", CID_MANFID_SAMSUNG, 0x100, add_quirk_mmc,
+		  MMC_QUIRK_LONG_READ_TIME),
+
+	/*
 	 * On these Samsung MoviNAND parts, performing secure erase or
 	 * secure trim can result in unrecoverable corruption due to a
 	 * firmware bug.
@@ -2793,6 +2802,8 @@ static const struct mmc_fixup blk_fixups[] =
 	MMC_FIXUP("KYL00M", CID_MANFID_SAMSUNG, CID_OEMID_ANY, add_quirk_mmc,
 		  MMC_QUIRK_SEC_ERASE_TRIM_BROKEN),
 	MMC_FIXUP("VZL00M", CID_MANFID_SAMSUNG, CID_OEMID_ANY, add_quirk_mmc,
+		  MMC_QUIRK_SEC_ERASE_TRIM_BROKEN),
+	MMC_FIXUP("Q72SMB", CID_MANFID_SAMSUNG, CID_OEMID_ANY, add_quirk_mmc,
 		  MMC_QUIRK_SEC_ERASE_TRIM_BROKEN),
 
 	/* Some INAND MCP devices advertise incorrect timeout values */
