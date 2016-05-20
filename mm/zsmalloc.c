@@ -603,7 +603,7 @@ static const struct file_operations zs_stat_size_ops = {
 	.release        = single_release,
 };
 
-static int zs_pool_stat_create(char *name, struct zs_pool *pool)
+static int zs_pool_stat_create(struct zs_pool *pool, char *name)
 {
 	struct dentry *entry;
 
@@ -660,7 +660,7 @@ static void __exit zs_stat_exit(void)
 {
 }
 
-static inline int zs_pool_stat_create(char *name, struct zs_pool *pool)
+static inline int zs_pool_stat_create(struct zs_pool *pool, char *name)
 {
 	return 0;
 }
@@ -706,8 +706,9 @@ static enum fullness_group get_fullness_group(struct page *first_page)
  * have. This functions inserts the given zspage into the freelist
  * identified by <class, fullness_group>.
  */
-static void insert_zspage(struct page *first_page, struct size_class *class,
-				enum fullness_group fullness)
+static void insert_zspage(struct size_class *class,
+				enum fullness_group fullness,
+				struct page *first_page)
 {
 	struct page **head;
 
@@ -729,8 +730,9 @@ static void insert_zspage(struct page *first_page, struct size_class *class,
  * This function removes the given zspage from the freelist identified
  * by <class, fullness_group>.
  */
-static void remove_zspage(struct page *first_page, struct size_class *class,
-				enum fullness_group fullness)
+static void remove_zspage(struct size_class *class,
+				enum fullness_group fullness,
+				struct page *first_page)
 {
 	struct page **head;
 
@@ -772,8 +774,8 @@ static enum fullness_group fix_fullness_group(struct size_class *class,
 	get_zspage_mapping(first_page, &class_idx, &currfg);
 	newfg = get_fullness_group(first_page);
 	/* Need to do this even if currfg == newfg, to update lru */
-	remove_zspage(first_page, class, currfg);
-	insert_zspage(first_page, class, newfg);
+	remove_zspage(class, currfg, first_page);
+	insert_zspage(class, newfg, first_page);
 	if (currfg != newfg)
 		set_zspage_mapping(first_page, class_idx, newfg);
 
@@ -1002,7 +1004,7 @@ static void free_zspage(struct page *first_page)
 }
 
 /* Initialize a newly allocated zspage */
-static void init_zspage(struct page *first_page, struct size_class *class)
+static void init_zspage(struct size_class *class, struct page *first_page)
 {
 	unsigned long off = 0;
 	struct page *page = first_page;
@@ -1089,7 +1091,7 @@ static struct page *alloc_zspage(struct size_class *class, gfp_t flags)
 		prev_page = page;
 	}
 
-	init_zspage(first_page, class);
+	init_zspage(class, first_page);
 
 	first_page->freelist = location_to_obj(first_page, 0);
 	/* Maximum number of objects we can store in this zspage */
@@ -1144,7 +1146,7 @@ static int reclaim_zspage(struct zs_pool *pool, struct page *first_page)
 	 * so it's not available for use by zs_malloc,
 	 * and won't be freed by zs_free
 	 */
-	remove_zspage(first_page, class, fullness);
+	remove_zspage(class, fullness, first_page);
 	set_zspage_mapping(first_page, class_idx, ZS_RECLAIM);
 
 	spin_unlock(&class->lock);
@@ -1569,8 +1571,8 @@ void zs_unmap_object(struct zs_pool *pool, unsigned long handle)
 }
 EXPORT_SYMBOL_GPL(zs_unmap_object);
 
-static unsigned long obj_malloc(struct page *first_page,
-		struct size_class *class, unsigned long handle)
+static unsigned long obj_malloc(struct size_class *class,
+				struct page *first_page, unsigned long handle)
 {
 	unsigned long obj;
 	struct link_free *link;
@@ -1647,7 +1649,7 @@ unsigned long zs_malloc(struct zs_pool *pool, size_t size, gfp_t gfp)
 				class->size, class->pages_per_zspage));
 	}
 
-	obj = obj_malloc(first_page, class, handle);
+	obj = obj_malloc(class, first_page, handle);
 	/* Now move the zspage to another fullness group, if required */
 	fix_fullness_group(class, first_page);
 	record_obj(handle, obj);
@@ -1737,8 +1739,8 @@ void zs_free(struct zs_pool *pool, unsigned long handle)
 }
 EXPORT_SYMBOL_GPL(zs_free);
 
-static void zs_object_copy(unsigned long src, unsigned long dst,
-				struct size_class *class)
+static void zs_object_copy(struct size_class *class, unsigned long dst,
+				unsigned long src)
 {
 	struct page *s_page, *d_page;
 	unsigned long s_objidx, d_objidx;
@@ -1806,8 +1808,8 @@ static void zs_object_copy(unsigned long src, unsigned long dst,
  * Find alloced object in zspage from index object and
  * return handle.
  */
-static unsigned long find_alloced_obj(struct page *page, int index,
-					struct size_class *class)
+static unsigned long find_alloced_obj(struct size_class *class,
+					struct page *page, int index)
 {
 	unsigned long head;
 	int offset = 0;
@@ -1857,7 +1859,7 @@ static int migrate_zspage(struct zs_pool *pool, struct size_class *class,
 	int ret = 0;
 
 	while (1) {
-		handle = find_alloced_obj(s_page, index, class);
+		handle = find_alloced_obj(class, s_page, index);
 		if (!handle) {
 			s_page = get_next_page(s_page);
 			if (!s_page)
@@ -1874,8 +1876,8 @@ static int migrate_zspage(struct zs_pool *pool, struct size_class *class,
 		}
 
 		used_obj = handle_to_obj(handle);
-		free_obj = obj_malloc(d_page, class, handle);
-		zs_object_copy(free_obj, used_obj, class);
+		free_obj = obj_malloc(class, d_page, handle);
+		zs_object_copy(class, free_obj, used_obj);
 		index++;
 		/*
 		 * record_obj updates handle's value to free_obj and it will
@@ -1904,7 +1906,7 @@ static struct page *alloc_target_page(struct size_class *class)
 	for (i = 0; i < _ZS_NR_FULLNESS_GROUPS; i++) {
 		page = class->fullness_list[i];
 		if (page) {
-			remove_zspage(page, class, i);
+			remove_zspage(class, i, page);
 			break;
 		}
 	}
@@ -1929,7 +1931,7 @@ static enum fullness_group putback_zspage(struct zs_pool *pool,
 	BUG_ON(!is_first_page(first_page));
 
 	fullness = get_fullness_group(first_page);
-	insert_zspage(first_page, class, fullness);
+	insert_zspage(class, fullness, first_page);
 	set_zspage_mapping(first_page, class->index, fullness);
 
 	if (fullness == ZS_EMPTY) {
@@ -1950,7 +1952,7 @@ static struct page *isolate_source_page(struct size_class *class)
 
 	page = class->fullness_list[ZS_ALMOST_EMPTY];
 	if (page)
-		remove_zspage(page, class, ZS_ALMOST_EMPTY);
+		remove_zspage(class, ZS_ALMOST_EMPTY, page);
 
 	return page;
 }
@@ -2132,7 +2134,7 @@ struct zs_pool *zs_create_pool(char *name, struct zs_ops *ops)
 
 	pool->ops = ops;
 
-	if (zs_pool_stat_create(name, pool))
+	if (zs_pool_stat_create(pool, name))
 		goto err;
 
 	return pool;
