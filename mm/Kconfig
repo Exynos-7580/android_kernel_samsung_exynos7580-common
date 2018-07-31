@@ -591,6 +591,14 @@ config VM_MAX_READAHEAD
 	  to grow to a maximum size of configured. This will benefit sequential
 	  read throughput and thus early boot performance.
 
+config KSM_THREAD_SLEEPMS
+	int "default ms range when ksm should sleep between batches"
+	default 20
+	help
+	  This sets the default milliseconds range when ksm should sleep between
+	  batches. The implementatiion of this config is done to provide a window
+	  configurable via defconfig. If left untouched it defaults to stock 20ms.
+
 config DIRECT_RECLAIM_FILE_PAGES_ONLY
 	bool "Reclaim file pages only on direct reclaim path"
 	depends on ZSWAP
