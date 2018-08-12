@@ -621,6 +621,7 @@ static int hrtimer_reprogram(struct hrtimer *timer,
 static inline void hrtimer_init_hres(struct hrtimer_cpu_base *base)
 {
 	base->expires_next.tv64 = KTIME_MAX;
+	base->hang_detected = 0;
 	base->hres_active = 0;
 }
 
@@ -1614,6 +1615,7 @@ static void init_hrtimers_cpu(int cpu)
 	}
 
 	cpu_base->cpu = cpu;
+	cpu_base->active_bases = 0;
 	hrtimer_init_hres(cpu_base);
 }
 
