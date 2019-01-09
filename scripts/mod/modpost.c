@@ -23,15 +23,17 @@
 #include "../../include/linux/export.h"
 
 /* Are we using CONFIG_MODVERSIONS? */
-int modversions = 0;
+static int modversions = 0;
 /* Warn about undefined symbols? (do so if we have vmlinux) */
-int have_vmlinux = 0;
+static int have_vmlinux = 0;
 /* Is CONFIG_MODULE_SRCVERSION_ALL set? */
 static int all_versions = 0;
 /* If we are modposting external module set to 1 */
 static int external_module = 0;
 /* Warn about section mismatch in vmlinux if set to 1 */
 static int vmlinux_section_warnings = 1;
+/* Exit with an error when there is a section mismatch if set to 1 */
+static int section_error_on_mismatch;
 /* Only warn about unresolved symbols */
 static int warn_unresolved = 0;
 /* How a symbol is exported */
@@ -226,7 +228,7 @@ static struct symbol *find_symbol(const char *name)
 	return NULL;
 }
 
-static struct {
+static const struct {
 	const char *str;
 	enum export export;
 } export_list[] = {
@@ -821,7 +823,7 @@ static int match(const char *sym, const char * const pat[])
 }
 
 /* sections that we do not want to do full section mismatch check on */
-static const char *section_white_list[] =
+static const char *const section_white_list[] =
 {
 	".comment*",
 	".debug*",
@@ -865,51 +867,57 @@ static void check_section(const char *modname, struct elf_info *elf,
 
 
 #define ALL_INIT_DATA_SECTIONS \
-	".init.setup$", ".init.rodata$", \
-	".cpuinit.rodata$", ".meminit.rodata$", \
-	".init.data$", ".cpuinit.data$", ".meminit.data$"
+	".init.setup$", ".init.rodata$", ".meminit.rodata$", \
+	".init.data$", ".meminit.data$"
 #define ALL_EXIT_DATA_SECTIONS \
-	".exit.data$", ".cpuexit.data$", ".memexit.data$"
+	".exit.data$", ".memexit.data$"
 
 #define ALL_INIT_TEXT_SECTIONS \
-	".init.text$", ".cpuinit.text$", ".meminit.text$"
+	".init.text$", ".meminit.text$"
 #define ALL_EXIT_TEXT_SECTIONS \
-	".exit.text$", ".cpuexit.text$", ".memexit.text$"
+	".exit.text$", "memexit.text$"
 
 #define ALL_PCI_INIT_SECTIONS	\
 	".pci_fixup_early$", ".pci_fixup_header$", ".pci_fixup_final$", \
 	".pci_fixup_enable$", ".pci_fixup_resume$", \
 	".pci_fixup_resume_early$", ".pci_fixup_suspend$"
 
-#define ALL_XXXINIT_SECTIONS CPU_INIT_SECTIONS, MEM_INIT_SECTIONS
-#define ALL_XXXEXIT_SECTIONS CPU_EXIT_SECTIONS, MEM_EXIT_SECTIONS
+#define ALL_XXXINIT_SECTIONS MEM_INIT_SECTIONS
+#define ALL_XXXEXIT_SECTIONS MEM_EXIT_SECTIONS
 
 #define ALL_INIT_SECTIONS INIT_SECTIONS, ALL_XXXINIT_SECTIONS
 #define ALL_EXIT_SECTIONS EXIT_SECTIONS, ALL_XXXEXIT_SECTIONS
 
 #define DATA_SECTIONS ".data$", ".data.rel$"
 #define TEXT_SECTIONS ".text$"
+#define OTHER_TEXT_SECTIONS ".ref.text", ".head.text", ".spinlock.text", \
+		".fixup", ".entry.text"
 
 #define INIT_SECTIONS      ".init.*"
-#define CPU_INIT_SECTIONS  ".cpuinit.*"
 #define MEM_INIT_SECTIONS  ".meminit.*"
 
 #define EXIT_SECTIONS      ".exit.*"
-#define CPU_EXIT_SECTIONS  ".cpuexit.*"
 #define MEM_EXIT_SECTIONS  ".memexit.*"
 
+#define ALL_TEXT_SECTIONS  ALL_INIT_TEXT_SECTIONS, ALL_EXIT_TEXT_SECTIONS, \
+		TEXT_SECTIONS, OTHER_TEXT_SECTIONS
+
 /* init data sections */
-static const char *init_data_sections[] = { ALL_INIT_DATA_SECTIONS, NULL };
+static const char *const init_data_sections[] =
+	{ ALL_INIT_DATA_SECTIONS, NULL };
 
 /* all init sections */
-static const char *init_sections[] = { ALL_INIT_SECTIONS, NULL };
+static const char *const init_sections[] = { ALL_INIT_SECTIONS, NULL };
 
 /* All init and exit sections (code + data) */
-static const char *init_exit_sections[] =
+static const char *const init_exit_sections[] =
 	{ALL_INIT_SECTIONS, ALL_EXIT_SECTIONS, NULL };
 
+/* all text sections */
+static const char *const text_sections[] = { ALL_TEXT_SECTIONS, NULL };
+
 /* data section */
-static const char *data_sections[] = { DATA_SECTIONS, NULL };
+static const char *const data_sections[] = { DATA_SECTIONS, NULL };
 
 
 /* symbols in .data that may refer to init/exit sections */
@@ -923,9 +931,10 @@ static const char *data_sections[] = { DATA_SECTIONS, NULL };
 	"*_probe_one",							\
 	"*_console"
 
-static const char *head_sections[] = { ".head.text*", NULL };
-static const char *linker_symbols[] =
+static const char *const head_sections[] = { ".head.text*", NULL };
+static const char *const linker_symbols[] =
 	{ "__init_begin", "_sinittext", "_einittext", NULL };
+static const char *const optim_symbols[] = { "*.constprop.*", NULL };
 
 enum mismatch {
 	TEXT_TO_ANY_INIT,
@@ -946,7 +955,7 @@ struct sectioncheck {
 	const char *symbol_white_list[20];
 };
 
-const struct sectioncheck sectioncheck[] = {
+static const struct sectioncheck sectioncheck[] = {
 /* Do not reference init/exit code/data from
  * normal code and data
  */
@@ -983,45 +992,17 @@ const struct sectioncheck sectioncheck[] = {
 	.mismatch = DATA_TO_ANY_EXIT,
 	.symbol_white_list = { DEFAULT_SYMBOL_WHITE_LIST, NULL },
 },
-/* Do not reference init code/data from cpuinit/meminit code/data */
+/* Do not reference init code/data from meminit code/data */
 {
 	.fromsec = { ALL_XXXINIT_SECTIONS, NULL },
 	.tosec   = { INIT_SECTIONS, NULL },
 	.mismatch = XXXINIT_TO_SOME_INIT,
 	.symbol_white_list = { DEFAULT_SYMBOL_WHITE_LIST, NULL },
 },
-/* Do not reference cpuinit code/data from meminit code/data */
-{
-	.fromsec = { MEM_INIT_SECTIONS, NULL },
-	.tosec   = { CPU_INIT_SECTIONS, NULL },
-	.mismatch = XXXINIT_TO_SOME_INIT,
-	.symbol_white_list = { DEFAULT_SYMBOL_WHITE_LIST, NULL },
-},
-/* Do not reference meminit code/data from cpuinit code/data */
-{
-	.fromsec = { CPU_INIT_SECTIONS, NULL },
-	.tosec   = { MEM_INIT_SECTIONS, NULL },
-	.mismatch = XXXINIT_TO_SOME_INIT,
-	.symbol_white_list = { DEFAULT_SYMBOL_WHITE_LIST, NULL },
-},
-/* Do not reference exit code/data from cpuexit/memexit code/data */
+/* Do not reference exit code/data from memexit code/data */
 {
 	.fromsec = { ALL_XXXEXIT_SECTIONS, NULL },
 	.tosec   = { EXIT_SECTIONS, NULL },
-	.mismatch = XXXEXIT_TO_SOME_EXIT,
-	.symbol_white_list = { DEFAULT_SYMBOL_WHITE_LIST, NULL },
-},
-/* Do not reference cpuexit code/data from memexit code/data */
-{
-	.fromsec = { MEM_EXIT_SECTIONS, NULL },
-	.tosec   = { CPU_EXIT_SECTIONS, NULL },
-	.mismatch = XXXEXIT_TO_SOME_EXIT,
-	.symbol_white_list = { DEFAULT_SYMBOL_WHITE_LIST, NULL },
-},
-/* Do not reference memexit code/data from cpuexit code/data */
-{
-	.fromsec = { CPU_EXIT_SECTIONS, NULL },
-	.tosec   = { MEM_EXIT_SECTIONS, NULL },
 	.mismatch = XXXEXIT_TO_SOME_EXIT,
 	.symbol_white_list = { DEFAULT_SYMBOL_WHITE_LIST, NULL },
 },
@@ -1093,8 +1074,6 @@ static const struct sectioncheck *section_mismatch(
  * Pattern 2:
  *   Many drivers utilise a *driver container with references to
  *   add, remove, probe functions etc.
- *   These functions may often be marked __cpuinit and we do not want to
- *   warn here.
  *   the pattern is identified by:
  *   tosec   = init or exit section
  *   fromsec = data section
@@ -1112,6 +1091,17 @@ static const struct sectioncheck *section_mismatch(
  *   For ex. symbols marking the init section boundaries.
  *   This pattern is identified by
  *   refsymname = __init_begin, _sinittext, _einittext
+ *
+ * Pattern 5:
+ *   GCC may optimize static inlines when fed constant arg(s) resulting
+ *   in functions like cpumask_empty() -- generating an associated symbol
+ *   cpumask_empty.constprop.3 that appears in the audit.  If the const that
+ *   is passed in comes from __init, like say nmi_ipi_mask, we get a
+ *   meaningless section warning.  May need to add isra symbols too...
+ *   This pattern is identified by
+ *   tosec   = init section
+ *   fromsec = text section
+ *   refsymname = *.constprop.*
  *
  **/
 static int secref_whitelist(const struct sectioncheck *mismatch,
@@ -1143,6 +1133,12 @@ static int secref_whitelist(const struct sectioncheck *mismatch,
 
 	/* Check for pattern 4 */
 	if (match(tosym, linker_symbols))
+		return 0;
+
+	/* Check for pattern 5 */
+	if (match(fromsec, text_sections) &&
+	    match(tosec, init_sections) &&
+	    match(fromsym, optim_symbols))
 		return 0;
 
 	return 1;
@@ -1253,7 +1249,6 @@ static Elf_Sym *find_elf_symbol2(struct elf_info *elf, Elf_Addr addr,
 /*
  * Convert a section name to the function/data attribute
  * .init.text => __init
- * .cpuinit.data => __cpudata
  * .memexitconst => __memconst
  * etc.
  *
@@ -2156,7 +2151,7 @@ int main(int argc, char **argv)
 	struct ext_sym_list *extsym_iter;
 	struct ext_sym_list *extsym_start = NULL;
 
-	while ((opt = getopt(argc, argv, "i:I:e:msST:o:awM:K:")) != -1) {
+	while ((opt = getopt(argc, argv, "i:I:e:msST:o:awM:K:E")) != -1) {
 		switch (opt) {
 		case 'i':
 			kernel_read = optarg;
@@ -2193,6 +2188,9 @@ int main(int argc, char **argv)
 			break;
 		case 'w':
 			warn_unresolved = 1;
+			break;
+		case 'E':
+			section_error_on_mismatch = 1;
 			break;
 		default:
 			exit(1);
@@ -2246,11 +2244,23 @@ int main(int argc, char **argv)
 
 	if (dump_write)
 		write_dump(dump_write);
-	if (sec_mismatch_count && !sec_mismatch_verbose)
-		warn("modpost: Found %d section mismatch(es).\n"
-		     "To see full details build your kernel with:\n"
-		     "'make CONFIG_DEBUG_SECTION_MISMATCH=y'\n",
-		     sec_mismatch_count);
+
+	if (sec_mismatch_count && !sec_mismatch_verbose) {
+		merror(
+		"modpost: Found %d section mismatch(es).\n"
+		"To see full details build your kernel with:\n"
+		"'make CONFIG_DEBUG_SECTION_MISMATCH=y'\n",
+		sec_mismatch_count);
+
+	}
+
+	if (sec_mismatch_count && section_error_on_mismatch) {
+		err |= 1;
+		printf(
+		"To build the kernel despite the mismatches, "
+		"build with:\n'make CONFIG_NO_ERROR_ON_MISMATCH=y'\n"
+		"(NOTE: This is not recommended)\n");
+	}
 
 	return err;
 }

@@ -269,7 +269,6 @@ config CPU_BIG_ENDIAN
 
 config SMP
 	bool "Symmetric Multi-Processing"
-	select USE_GENERIC_SMP_HELPERS
 	help
 	  This enables support for systems with more than one CPU.  If
 	  you say N here, the kernel will run on single and
@@ -635,6 +634,25 @@ endmenu
 menu "CPU Power Management"
 
 source "drivers/cpuidle/Kconfig"
+
+endmenu
+
+menu "Expermimental Security Enhancements"
+
+config KUSER_HELPERS_SELECTIVE_DISABLE
+	bool "Disable KUSER_HELPERS selectively"
+	depends on ARM64
+	default n
+	help
+	  Kuser_Helpers is a set of functions in the vector page at a fixed address that
+	  are used to support applications compiled for legacy ARM <7.  These functions
+	  being at a fixed address creates an ASLR bypass.
+
+	  Do not enable this feature unless you know what you are doing, this is
+	  experimental, and will break any application that uses the Kuser_Helpers or
+	  registers a signal handler and uses the kernel trampolines.
+
+	  If unsure, say N.
 
 endmenu
 

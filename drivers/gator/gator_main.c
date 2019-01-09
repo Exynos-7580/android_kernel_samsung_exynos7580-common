@@ -25,7 +25,7 @@ static unsigned long gator_protocol_version = PROTOCOL_VERSION;
 #include <linux/utsname.h>
 #include <linux/kthread.h>
 #include <asm/stacktrace.h>
-#include <asm/uaccess.h>
+#include <linux/uaccess.h>
 
 #include "gator.h"
 
@@ -701,7 +701,7 @@ static u64 gator_get_time(void)
 /******************************************************************************
  * cpu hotplug and pm notifiers
  ******************************************************************************/
-static int __cpuinit gator_hotcpu_notify(struct notifier_block *self, unsigned long action, void *hcpu)
+static int gator_hotcpu_notify(struct notifier_block *self, unsigned long action, void *hcpu)
 {
 	int cpu = lcpu_to_pcpu((long)hcpu);
 

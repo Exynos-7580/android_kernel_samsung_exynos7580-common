@@ -941,8 +941,10 @@ void task_numa_work(struct callback_head *work)
 		vma = mm->mmap;
 	}
 	for (; vma; vma = vma->vm_next) {
-		if (!vma_migratable(vma))
+		if (!vma_migratable(vma) || !vma_policy_mof(vma) ||
+			is_vm_hugetlb_page(vma) || (vma->vm_flags & VM_MIXEDMAP)) {
 			continue;
+		}
 
 		/* Skip small VMAs. They are not likely to be of relevance */
 		if (vma->vm_end - vma->vm_start < HPAGE_SIZE)
@@ -3381,26 +3383,29 @@ static inline unsigned long effective_load(struct task_group *tg, int cpu,
 
 #endif
 
+/*
+ * Detect M:N waker/wakee relationships via a switching-frequency heuristic.
+ * A waker of many should wake a different task than the one last awakened
+ * at a frequency roughly N times higher than one of its wakees.  In order
+ * to determine whether we should let the load spread vs consolodating to
+ * shared cache, we look for a minimum 'flip' frequency of llc_size in one
+ * partner, and a factor of lls_size higher frequency in the other.  With
+ * both conditions met, we can be relatively sure that the relationship is
+ * non-monogamous, with partner count exceeding socket size.  Waker/wakee
+ * being client/server, worker/dispatcher, interrupt source or whatever is
+ * irrelevant, spread criteria is apparent partner count exceeds socket size.
+ */
 static int wake_wide(struct task_struct *p)
 {
+	unsigned int master = current->wakee_flips;
+	unsigned int slave = p->wakee_flips;
 	int factor = this_cpu_read(sd_llc_size);
 
-	/*
-	 * Yeah, it's the switching-frequency, could means many wakee or
-	 * rapidly switch, use factor here will just help to automatically
-	 * adjust the loose-degree, so bigger node will lead to more pull.
-	 */
-	if (p->wakee_flips > factor) {
-		/*
-		 * wakee is somewhat hot, it needs certain amount of cpu
-		 * resource, so if waker is far more hot, prefer to leave
-		 * it alone.
-		 */
-		if (current->wakee_flips > (factor * p->wakee_flips))
-			return 1;
-	}
-
-	return 0;
+	if (master < slave)
+		swap(master, slave);
+	if (slave < factor || master < slave * factor)
+		return 0;
+	return 1;
 }
 
 static int wake_affine(struct sched_domain *sd, struct task_struct *p, int sync)
@@ -3411,13 +3416,6 @@ static int wake_affine(struct sched_domain *sd, struct task_struct *p, int sync)
 	struct task_group *tg;
 	unsigned long weight;
 	int balanced;
-
-	/*
-	 * If we wake multiple tasks be careful to not bounce
-	 * ourselves around too much.
-	 */
-	if (wake_wide(p))
-		return 0;
 
 	idx	  = sd->wake_idx;
 	this_cpu  = smp_processor_id();
@@ -3556,6 +3554,10 @@ find_idlest_cpu(struct sched_group *group, struct task_struct *p, int this_cpu)
 	unsigned long load, min_load = ULONG_MAX;
 	int idlest = -1;
 	int i;
+
+	/* Check if we have any choice: */
+	if (group->group_weight == 1)
+		return cpumask_first(sched_group_cpus(group));
 
 	/* Traverse only the allowed CPUs */
 	for_each_cpu_and(i, sched_group_cpus(group), tsk_cpus_allowed(p)) {
@@ -4502,7 +4504,7 @@ select_task_rq_fair(struct task_struct *p, int sd_flag, int wake_flags)
 	struct sched_domain *tmp, *affine_sd = NULL, *sd = NULL;
 	int cpu = smp_processor_id();
 	int prev_cpu = task_cpu(p);
-	int new_cpu = cpu;
+	int new_cpu = prev_cpu;
 	int want_affine = 0;
 	int sync = wake_flags & WF_SYNC;
 
@@ -4510,8 +4512,7 @@ select_task_rq_fair(struct task_struct *p, int sd_flag, int wake_flags)
 		return prev_cpu;
 
 	if (sd_flag & SD_BALANCE_WAKE) {
-		if (cpumask_test_cpu(cpu, tsk_cpus_allowed(p)))
-			want_affine = 1;
+		want_affine = !wake_wide(p) && cpumask_test_cpu(cpu, tsk_cpus_allowed(p));
 		new_cpu = prev_cpu;
 	}
 
@@ -4532,17 +4533,21 @@ select_task_rq_fair(struct task_struct *p, int sd_flag, int wake_flags)
 
 		if (tmp->flags & sd_flag)
 			sd = tmp;
+		else if (!want_affine)
+			break;
 	}
 
 	if (affine_sd) {
+		sd = NULL; /* Prefer wake_affine over balance flags */
 		if (cpu != prev_cpu && wake_affine(affine_sd, p, sync))
-			prev_cpu = cpu;
-
-		new_cpu = select_idle_sibling(p, prev_cpu);
-		goto unlock;
+			new_cpu = cpu;
 	}
 
-	while (sd) {
+	if (!sd) {
+		if (sd_flag & SD_BALANCE_WAKE) /* XXX always ? */
+			new_cpu = select_idle_sibling(p, new_cpu);
+
+	} else while (sd) {
 		int load_idx = sd->forkexec_idx;
 		struct sched_group *group;
 		int weight;
@@ -4580,7 +4585,6 @@ select_task_rq_fair(struct task_struct *p, int sd_flag, int wake_flags)
 		}
 		/* while loop will break here if sd == NULL */
 	}
-unlock:
 	rcu_read_unlock();
 
 #ifdef CONFIG_SCHED_HMP
@@ -6734,7 +6738,7 @@ void nohz_balance_enter_idle(int cpu)
 	set_bit(NOHZ_TICK_STOPPED, nohz_flags(cpu));
 }
 
-static int __cpuinit sched_ilb_notifier(struct notifier_block *nfb,
+static int sched_ilb_notifier(struct notifier_block *nfb,
 					unsigned long action, void *hcpu)
 {
 	switch (action & ~CPU_TASKS_FROZEN) {
@@ -7520,14 +7524,16 @@ static void run_rebalance_domains(struct softirq_action *h)
 
 	hmp_force_up_migration(this_cpu);
 
-	rebalance_domains(this_cpu, idle);
-
 	/*
 	 * If this cpu has a pending nohz_balance_kick, then do the
 	 * balancing on behalf of the other idle cpus whose ticks are
-	 * stopped.
+	 * stopped. Do nohz_idle_balance *before* rebalance_domains to
+	 * give the idle cpus a chance to load balance. Else we may
+	 * load balance only within the local sched_domain hierarchy
+	 * and abort nohz_idle_balance altogether if we pull some load.
 	 */
 	nohz_idle_balance(this_cpu, idle);
+	rebalance_domains(this_cpu, idle);
 }
 
 static inline int on_null_domain(int cpu)

@@ -46,7 +46,7 @@
 #include <linux/irq_work.h>
 #include <linux/utsname.h>
 
-#include <asm/uaccess.h>
+#include <linux/uaccess.h>
 
 #define CREATE_TRACE_POINTS
 #include <trace/events/printk.h>
@@ -2077,7 +2077,7 @@ void console_flush(void)
  * called when a new CPU comes online (or fails to come up), and ensures
  * that any such output gets printed.
  */
-static int __cpuinit console_cpu_notify(struct notifier_block *self,
+static int console_cpu_notify(struct notifier_block *self,
 	unsigned long action, void *hcpu)
 {
 	switch (action) {
@@ -3105,7 +3105,7 @@ void show_regs_print_info(const char *log_lvl)
 {
 	dump_stack_print_info(log_lvl);
 
-	printk("%stask: %p ti: %p task.ti: %p\n",
+	printk("%stask: %pP ti: %pP task.ti: %pP\n",
 	       log_lvl, current, current_thread_info(),
 	       task_thread_info(current));
 }

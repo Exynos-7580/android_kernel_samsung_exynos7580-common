@@ -563,6 +563,33 @@ static int tls_set(struct task_struct *target, const struct user_regset *regset,
 	return ret;
 }
 
+static int system_call_get(struct task_struct *target,
+			   const struct user_regset *regset,
+			   unsigned int pos, unsigned int count,
+			   void *kbuf, void __user *ubuf)
+{
+	int syscallno = task_pt_regs(target)->syscallno;
+
+	return user_regset_copyout(&pos, &count, &kbuf, &ubuf,
+				   &syscallno, 0, -1);
+}
+
+static int system_call_set(struct task_struct *target,
+			   const struct user_regset *regset,
+			   unsigned int pos, unsigned int count,
+			   const void *kbuf, const void __user *ubuf)
+{
+	int syscallno = task_pt_regs(target)->syscallno;
+	int ret;
+
+	ret = user_regset_copyin(&pos, &count, &kbuf, &ubuf, &syscallno, 0, -1);
+	if (ret)
+		return ret;
+
+	task_pt_regs(target)->syscallno = syscallno;
+	return ret;
+}
+
 enum aarch64_regset {
 	REGSET_GPR,
 	REGSET_FPR,
@@ -571,6 +598,7 @@ enum aarch64_regset {
 	REGSET_HW_BREAK,
 	REGSET_HW_WATCH,
 #endif
+	REGSET_SYSTEM_CALL,
 };
 
 static const struct user_regset aarch64_regsets[] = {
@@ -620,6 +648,14 @@ static const struct user_regset aarch64_regsets[] = {
 		.set = hw_break_set,
 	},
 #endif
+	[REGSET_SYSTEM_CALL] = {
+		.core_note_type = NT_ARM_SYSTEM_CALL,
+		.n = 1,
+		.size = sizeof(int),
+		.align = sizeof(int),
+		.get = system_call_get,
+		.set = system_call_set,
+	},
 };
 
 static const struct user_regset_view user_aarch64_view = {
@@ -1121,7 +1157,7 @@ asmlinkage int syscall_trace_enter(struct pt_regs *regs)
 	unsigned int saved_syscallno = regs->syscallno;
 
 	/* Do the secure computing check first; failures should be fast. */
-	if (secure_computing(regs->syscallno) == -1)
+	if (secure_computing() == -1)
 		return RET_SKIP_SYSCALL_TRACE;
 
 	if (test_thread_flag_relaxed(TIF_SYSCALL_TRACE))

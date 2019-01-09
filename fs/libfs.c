@@ -14,7 +14,7 @@
 #include <linux/writeback.h>
 #include <linux/buffer_head.h> /* sync_mapping_buffers */
 
-#include <asm/uaccess.h>
+#include <linux/uaccess.h>
 
 #include "internal.h"
 
@@ -926,7 +926,7 @@ int generic_file_fsync(struct file *file, loff_t start, loff_t end,
 
 	mutex_lock(&inode->i_mutex);
 	ret = sync_mapping_buffers(inode->i_mapping);
-	if (!(inode->i_state & I_DIRTY))
+	if (!(inode->i_state & I_DIRTY_ALL))
 		goto out;
 	if (datasync && !(inode->i_state & I_DIRTY_DATASYNC))
 		goto out;
