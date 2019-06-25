@@ -45,7 +45,7 @@ static struct vfsmount *shm_mnt;
 #include <linux/xattr.h>
 #include <linux/exportfs.h>
 #include <linux/posix_acl.h>
-#include <linux/generic_acl.h>
+#include <linux/posix_acl_xattr.h>
 #include <linux/mman.h>
 #include <linux/string.h>
 #include <linux/slab.h>
@@ -286,8 +286,8 @@ static int shmem_add_to_page_cache(struct page *page,
 {
 	int error;
 
-	VM_BUG_ON(!PageLocked(page));
-	VM_BUG_ON(!PageSwapBacked(page));
+	VM_BUG_ON_PAGE(!PageLocked(page), page);
+	VM_BUG_ON_PAGE(!PageSwapBacked(page), page);
 
 	page_cache_get(page);
 	page->mapping = mapping;
@@ -496,7 +496,7 @@ static void shmem_undo_range(struct inode *inode, loff_t lstart, loff_t lend,
 				continue;
 			if (!unfalloc || !PageUptodate(page)) {
 				if (page->mapping == mapping) {
-					VM_BUG_ON(PageWriteback(page));
+					VM_BUG_ON_PAGE(PageWriteback(page), page);
 					truncate_inode_page(mapping, page);
 				} else {
 					/* Page was replaced by swap: retry */
@@ -579,7 +579,7 @@ static void shmem_undo_range(struct inode *inode, loff_t lstart, loff_t lend,
 			lock_page(page);
 			if (!unfalloc || !PageUptodate(page)) {
 				if (page->mapping == mapping) {
-					VM_BUG_ON(PageWriteback(page));
+					VM_BUG_ON_PAGE(PageWriteback(page), page);
 					truncate_inode_page(mapping, page);
 				} else {
 					/* Page was replaced by swap: retry */
@@ -636,10 +636,8 @@ static int shmem_setattr(struct dentry *dentry, struct iattr *attr)
 	}
 
 	setattr_copy(inode, attr);
-#ifdef CONFIG_TMPFS_POSIX_ACL
 	if (attr->ia_valid & ATTR_MODE)
-		error = generic_acl_chmod(inode);
-#endif
+		error = posix_acl_chmod(inode, inode->i_mode);
 	return error;
 }
 
@@ -2037,26 +2035,22 @@ shmem_mknod(struct inode *dir, struct dentry *dentry, umode_t mode, dev_t dev)
 		error = security_inode_init_security(inode, dir,
 						     &dentry->d_name,
 						     shmem_initxattrs, NULL);
-		if (error) {
-			if (error != -EOPNOTSUPP) {
-				iput(inode);
-				return error;
-			}
-		}
-#ifdef CONFIG_TMPFS_POSIX_ACL
-		error = generic_acl_init(inode, dir);
-		if (error) {
-			iput(inode);
-			return error;
-		}
-#else
+		if (error && error != -EOPNOTSUPP)
+			goto out_iput;
+
+		error = simple_acl_create(dir, inode);
+		if (error)
+			goto out_iput;
+
 		error = 0;
-#endif
 		dir->i_size += BOGO_DIRENT_SIZE;
 		dir->i_ctime = dir->i_mtime = CURRENT_TIME;
 		d_instantiate(dentry, inode);
 		dget(dentry); /* Extra count - pin the dentry in core */
 	}
+	return error;
+out_iput:
+	iput(inode);
 	return error;
 }
 
@@ -2071,23 +2065,16 @@ shmem_tmpfile(struct inode *dir, struct dentry *dentry, umode_t mode)
 		error = security_inode_init_security(inode, dir,
 						     NULL,
 						     shmem_initxattrs, NULL);
-		if (error) {
-			if (error != -EOPNOTSUPP) {
-				iput(inode);
-				return error;
-			}
-		}
-#ifdef CONFIG_TMPFS_POSIX_ACL
-		error = generic_acl_init(inode, dir);
-		if (error) {
-			iput(inode);
-			return error;
-		}
-#else
-		error = 0;
-#endif
+		if (error && error != -EOPNOTSUPP)
+			goto out_iput;
+		error = simple_acl_create(dir, inode);
+		if (error)
+			goto out_iput;
 		d_tmpfile(dentry, inode);
 	}
+	return error;
+out_iput:
+	iput(inode);
 	return error;
 }
 
@@ -2113,16 +2100,20 @@ static int shmem_create(struct inode *dir, struct dentry *dentry, umode_t mode,
 static int shmem_link(struct dentry *old_dentry, struct inode *dir, struct dentry *dentry)
 {
 	struct inode *inode = old_dentry->d_inode;
-	int ret;
+	int ret = 0;
 
 	/*
 	 * No ordinary (disk based) filesystem counts links as inodes;
 	 * but each new link needs a new dentry, pinning lowmem, and
 	 * tmpfs dentries cannot be pruned until they are unlinked.
+	 * But if an O_TMPFILE file is linked into the tmpfs, the
+	 * first link must skip that, to get the accounting right.
 	 */
-	ret = shmem_reserve_inode(inode->i_sb);
-	if (ret)
-		goto out;
+	if (inode->i_nlink) {
+		ret = shmem_reserve_inode(inode->i_sb);
+		if (ret)
+			goto out;
+	}
 
 	dir->i_size += BOGO_DIRENT_SIZE;
 	inode->i_ctime = dir->i_ctime = dir->i_mtime = CURRENT_TIME;
@@ -2322,8 +2313,8 @@ static int shmem_initxattrs(struct inode *inode,
 
 static const struct xattr_handler *shmem_xattr_handlers[] = {
 #ifdef CONFIG_TMPFS_POSIX_ACL
-	&generic_acl_access_handler,
-	&generic_acl_default_handler,
+	&posix_acl_access_xattr_handler,
+	&posix_acl_default_xattr_handler,
 #endif
 	NULL
 };
@@ -2424,6 +2415,7 @@ static const struct inode_operations shmem_short_symlink_operations = {
 	.getxattr	= shmem_getxattr,
 	.listxattr	= shmem_listxattr,
 	.removexattr	= shmem_removexattr,
+	.set_acl	= simple_set_acl,
 #endif
 };
 
@@ -2861,6 +2853,7 @@ static const struct inode_operations shmem_dir_inode_operations = {
 #endif
 #ifdef CONFIG_TMPFS_POSIX_ACL
 	.setattr	= shmem_setattr,
+	.set_acl	= simple_set_acl,
 #endif
 };
 
@@ -2873,6 +2866,7 @@ static const struct inode_operations shmem_special_inode_operations = {
 #endif
 #ifdef CONFIG_TMPFS_POSIX_ACL
 	.setattr	= shmem_setattr,
+	.set_acl	= simple_set_acl,
 #endif
 };
 
