@@ -39,6 +39,7 @@
 DECLARE_HASHTABLE(uid_hash_table, UID_HASH_BITS);
 
 static spinlock_t cpufreq_stats_lock;
+static DEFINE_SPINLOCK(cpufreq_stats_table_lock);
 
 static DEFINE_SPINLOCK(cpufreq_stats_table_lock);
 static DEFINE_SPINLOCK(task_time_in_state_lock); /* task->time_in_state */
@@ -401,6 +402,7 @@ void acct_update_power(struct task_struct *task, cputime_t cputime) {
 
 out:
 	spin_unlock_irqrestore(&cpufreq_stats_table_lock, stl_flags);
+
 }
 EXPORT_SYMBOL_GPL(acct_update_power);
 

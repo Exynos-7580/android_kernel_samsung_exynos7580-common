@@ -1174,6 +1174,7 @@ char *pointer(const char *fmt, char *buf, char *end, void *ptr,
 		 * plain %p, no extension, check if we should always cleanse and
 		 * treat like %pK.
 		 */
+
 		if (!kptr_restrict_always_cleanse_pointers()) {
 			break;
 		}
