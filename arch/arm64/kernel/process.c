@@ -470,5 +470,4 @@ unsigned long arch_randomize_brk(struct mm_struct *mm)
 		return randomize_page(mm->brk, SZ_32M);
 	else
 		return randomize_page(mm->brk, SZ_1G);
-
 }
