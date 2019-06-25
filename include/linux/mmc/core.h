@@ -122,6 +122,7 @@ struct mmc_data {
 	unsigned int		sg_len;		/* size of scatter list */
 	struct scatterlist	*sg;		/* I/O scatter list */
 	s32			host_cookie;	/* host private data */
+	bool			fault_injected; /* fault injected */
 };
 
 struct mmc_host;
@@ -194,6 +195,7 @@ extern int __mmc_claim_host(struct mmc_host *host, atomic_t *abort);
 extern void mmc_release_host(struct mmc_host *host);
 extern int mmc_try_claim_host(struct mmc_host *host);
 
+extern void mmc_set_ios(struct mmc_host *host);
 extern int mmc_flush_cache(struct mmc_card *);
 extern int mmc_bkops_enable(struct mmc_host *host, u8 value);
 extern int mmc_poweroff_notify(struct mmc_card *card, unsigned int notify_type);

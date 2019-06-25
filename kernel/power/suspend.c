@@ -29,6 +29,7 @@
 #include <linux/rtc.h>
 #include <trace/events/power.h>
 #include <linux/wakeup_reason.h>
+#include <linux/interrupt.h>
 
 #include "power.h"
 
@@ -64,7 +65,9 @@ static void freeze_begin(void)
 static void freeze_enter(void)
 {
 	cpuidle_resume();
+	wakeup_mode_for_irqs(true);
 	wait_event(suspend_freeze_wait_head, suspend_freeze_wake);
+	wakeup_mode_for_irqs(false);
 	cpuidle_pause();
 }
 
@@ -315,8 +318,8 @@ int suspend_devices_and_enter(suspend_state_t state)
 	suspend_test_start();
 	error = dpm_suspend_start(PMSG_SUSPEND);
 	if (error) {
-		printk(KERN_ERR "PM: Some devices failed to suspend\n");
-		log_suspend_abort_reason("Some devices failed to suspend");
+		pr_err("PM: Some devices failed to suspend, or early wake event detected\n");
+		log_suspend_abort_reason("Some devices failed to suspend, or early wake event detected");
 		goto Recover_platform;
 	}
 	suspend_test_finish("suspend devices");

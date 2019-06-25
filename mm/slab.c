@@ -460,7 +460,7 @@ static inline struct slab *virt_to_slab(const void *obj)
 {
 	struct page *page = virt_to_head_page(obj);
 
-	VM_BUG_ON(!PageSlab(page));
+	VM_BUG_ON_PAGE(!PageSlab(page), page);
 	return page->slab_page;
 }
 
@@ -1001,6 +1001,11 @@ static inline void *____cache_alloc_node(struct kmem_cache *cachep,
 	return NULL;
 }
 
+static inline gfp_t gfp_exact_node(gfp_t flags)
+{
+	return flags;
+}
+
 #else	/* CONFIG_NUMA */
 
 static void *____cache_alloc_node(struct kmem_cache *, gfp_t, int);
@@ -1131,6 +1136,15 @@ static inline int cache_free_alien(struct kmem_cache *cachep, void *objp)
 		spin_unlock(&(cachep->node[nodeid])->list_lock);
 	}
 	return 1;
+}
+
+/*
+ * Construct gfp mask to allocate from a specific node but do not invoke reclaim
+ * or warn about failures.
+ */
+static inline gfp_t gfp_exact_node(gfp_t flags)
+{
+	return (flags | __GFP_THISNODE | __GFP_NOWARN) & ~__GFP_WAIT;
 }
 #endif
 
@@ -1748,7 +1762,7 @@ static void *kmem_getpages(struct kmem_cache *cachep, gfp_t flags, int nodeid)
 	if (cachep->flags & SLAB_RECLAIM_ACCOUNT)
 		flags |= __GFP_RECLAIMABLE;
 
-	page = alloc_pages_exact_node(nodeid, flags | __GFP_NOTRACK, cachep->gfporder);
+	page = __alloc_pages_node(nodeid, flags | __GFP_NOTRACK, cachep->gfporder);
 	if (!page) {
 		if (!(flags & __GFP_NOWARN) && printk_ratelimit())
 			slab_out_of_memory(cachep, flags, nodeid);
@@ -3030,7 +3044,7 @@ alloc_done:
 	if (unlikely(!ac->avail)) {
 		int x;
 force_grow:
-		x = cache_grow(cachep, flags | GFP_THISNODE, node, NULL);
+		x = cache_grow(cachep, gfp_exact_node(flags), node, NULL);
 
 		/* cache_grow can reenable interrupts, then ac could change. */
 		ac = cpu_cache_get(cachep);
@@ -3168,7 +3182,7 @@ out:
 
 #ifdef CONFIG_NUMA
 /*
- * Try allocating on another node if PF_SPREAD_SLAB|PF_MEMPOLICY.
+ * Try allocating on another node if PFA_SPREAD_SLAB is a mempolicy is set.
  *
  * If we are in_interrupt, then process context, including cpusets and
  * mempolicy, may not apply and should not be used for allocation policy.
@@ -3214,7 +3228,7 @@ static void *fallback_alloc(struct kmem_cache *cache, gfp_t flags)
 	local_flags = flags & (GFP_CONSTRAINT_MASK|GFP_RECLAIM_MASK);
 
 retry_cpuset:
-	cpuset_mems_cookie = get_mems_allowed();
+	cpuset_mems_cookie = read_mems_allowed_begin();
 	zonelist = node_zonelist(slab_node(), flags);
 
 retry:
@@ -3225,11 +3239,11 @@ retry:
 	for_each_zone_zonelist(zone, z, zonelist, high_zoneidx) {
 		nid = zone_to_nid(zone);
 
-		if (cpuset_zone_allowed_hardwall(zone, flags) &&
+		if (cpuset_zone_allowed(zone, flags | __GFP_HARDWALL) &&
 			cache->node[nid] &&
 			cache->node[nid]->free_objects) {
 				obj = ____cache_alloc_node(cache,
-					flags | GFP_THISNODE, nid);
+					gfp_exact_node(flags), nid);
 				if (obj)
 					break;
 		}
@@ -3255,7 +3269,7 @@ retry:
 			nid = page_to_nid(virt_to_page(obj));
 			if (cache_grow(cache, flags, nid, obj)) {
 				obj = ____cache_alloc_node(cache,
-					flags | GFP_THISNODE, nid);
+					gfp_exact_node(flags), nid);
 				if (!obj)
 					/*
 					 * Another processor may allocate the
@@ -3270,7 +3284,7 @@ retry:
 		}
 	}
 
-	if (unlikely(!put_mems_allowed(cpuset_mems_cookie) && !obj))
+	if (unlikely(!obj && read_mems_allowed_retry(cpuset_mems_cookie)))
 		goto retry_cpuset;
 	return obj;
 }
@@ -3328,7 +3342,7 @@ retry:
 
 must_grow:
 	spin_unlock(&n->list_lock);
-	x = cache_grow(cachep, flags | GFP_THISNODE, nodeid, NULL);
+	x = cache_grow(cachep, gfp_exact_node(flags), nodeid, NULL);
 	if (x)
 		goto retry;
 
@@ -3412,7 +3426,7 @@ __do_cache_alloc(struct kmem_cache *cache, gfp_t flags)
 {
 	void *objp;
 
-	if (unlikely(current->flags & (PF_SPREAD_SLAB | PF_MEMPOLICY))) {
+	if (current->mempolicy || cpuset_do_slab_mem_spread()) {
 		objp = alternate_node_alloc(cache, flags);
 		if (objp)
 			goto out;

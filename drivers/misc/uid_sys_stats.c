@@ -1,4 +1,4 @@
-/* drivers/misc/uid_cputime.c
+/* drivers/misc/uid_sys_stats.c
  *
  * Copyright (C) 2014 - 2015 Google, Inc.
  *
@@ -99,9 +99,11 @@ static int uid_cputime_show(struct seq_file *m, void *v)
 {
 	struct uid_entry *uid_entry;
 	struct task_struct *task, *temp;
+	struct user_namespace *user_ns = current_user_ns();
 	cputime_t utime;
 	cputime_t stime;
 	unsigned long bkt;
+	uid_t uid;
 
 	rt_mutex_lock(&uid_lock);
 
@@ -113,14 +115,13 @@ static int uid_cputime_show(struct seq_file *m, void *v)
 
 	read_lock(&tasklist_lock);
 	do_each_thread(temp, task) {
-		uid_entry = find_or_register_uid(from_kuid_munged(
-			current_user_ns(), task_uid(task)));
+		uid = from_kuid_munged(user_ns, task_uid(task));
+		uid_entry = find_or_register_uid(uid);
 		if (!uid_entry) {
 			read_unlock(&tasklist_lock);
 			rt_mutex_unlock(&uid_lock);
 			pr_err("%s: failed to find the uid_entry for uid %d\n",
-				__func__, from_kuid_munged(current_user_ns(),
-				task_uid(task)));
+				__func__, uid);
 			return -ENOMEM;
 		}
 		/* if this task is exiting, we have already accounted for the
@@ -263,13 +264,29 @@ static void compute_uid_io_bucket_stats(struct io_stats *io_bucket,
 					struct io_stats *io_last,
 					struct io_stats *io_dead)
 {
-	io_bucket->read_bytes += io_curr->read_bytes + io_dead->read_bytes -
+	s64 delta;
+
+	delta = io_curr->read_bytes + io_dead->read_bytes -
 		io_last->read_bytes;
-	io_bucket->write_bytes += io_curr->write_bytes + io_dead->write_bytes -
+	if (delta > 0)
+		io_bucket->read_bytes += delta;
+
+	delta = io_curr->write_bytes + io_dead->write_bytes -
 		io_last->write_bytes;
-	io_bucket->rchar += io_curr->rchar + io_dead->rchar - io_last->rchar;
-	io_bucket->wchar += io_curr->wchar + io_dead->wchar - io_last->wchar;
-	io_bucket->fsync += io_curr->fsync + io_dead->fsync - io_last->fsync;
+	if (delta > 0)
+		io_bucket->write_bytes += delta;
+
+	delta = io_curr->rchar + io_dead->rchar - io_last->rchar;
+	if (delta > 0)
+		io_bucket->rchar += delta;
+
+	delta = io_curr->wchar + io_dead->wchar - io_last->wchar;
+	if (delta > 0)
+		io_bucket->wchar += delta;
+
+	delta = io_curr->fsync + io_dead->fsync - io_last->fsync;
+	if (delta > 0)
+		io_bucket->fsync += delta;
 
 	io_last->read_bytes = io_curr->read_bytes;
 	io_last->write_bytes = io_curr->write_bytes;
@@ -492,7 +509,7 @@ static int __init proc_uid_sys_stats_init(void)
 		&uid_io_fops, NULL);
 
 	proc_parent = proc_mkdir("uid_procstat", NULL);
-	if (!io_parent) {
+	if (!proc_parent) {
 		pr_err("%s: failed to create uid_procstat proc entry\n",
 			__func__);
 		goto err;

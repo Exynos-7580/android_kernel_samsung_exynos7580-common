@@ -596,7 +596,7 @@ void putback_lru_page(struct page *page)
 	int active = !!TestClearPageActive(page);
 	int was_unevictable = PageUnevictable(page);
 
-	VM_BUG_ON(PageLRU(page));
+	VM_BUG_ON_PAGE(PageLRU(page), page);
 
 redo:
 	ClearPageUnevictable(page);
@@ -752,8 +752,8 @@ static unsigned long shrink_page_list(struct list_head *page_list,
 		if (!trylock_page(page))
 			goto keep;
 
-		VM_BUG_ON(PageActive(page));
-		VM_BUG_ON(page_zone(page) != zone);
+		VM_BUG_ON_PAGE(PageActive(page), page);
+		VM_BUG_ON_PAGE(page_zone(page) != zone, page);
 
 		sc->nr_scanned++;
 
@@ -978,14 +978,14 @@ activate_locked:
 		/* Not a candidate for swapping, so reclaim swap space. */
 		if (PageSwapCache(page) && vm_swap_full(page_swap_info(page)))
 			try_to_free_swap(page);
-		VM_BUG_ON(PageActive(page));
+		VM_BUG_ON_PAGE(PageActive(page), page);
 		SetPageActive(page);
 		pgactivate++;
 keep_locked:
 		unlock_page(page);
 keep:
 		list_add(&page->lru, &ret_pages);
-		VM_BUG_ON(PageLRU(page) || PageUnevictable(page));
+		VM_BUG_ON_PAGE(PageLRU(page) || PageUnevictable(page), page);
 	}
 
 	/*
@@ -1145,7 +1145,7 @@ static unsigned long isolate_lru_pages(unsigned long nr_to_scan,
 		page = lru_to_page(src);
 		prefetchw_prev_lru_page(page, src, flags);
 
-		VM_BUG_ON(!PageLRU(page));
+		VM_BUG_ON_PAGE(!PageLRU(page), page);
 
 		switch (__isolate_lru_page(page, mode)) {
 		case 0:
@@ -1200,7 +1200,7 @@ int isolate_lru_page(struct page *page)
 {
 	int ret = -EBUSY;
 
-	VM_BUG_ON(!page_count(page));
+	VM_BUG_ON_PAGE(!page_count(page), page);
 
 	if (PageLRU(page)) {
 		struct zone *zone = page_zone(page);
@@ -1298,7 +1298,7 @@ putback_inactive_pages(struct lruvec *lruvec, struct list_head *page_list)
 		struct page *page = lru_to_page(page_list);
 		int lru;
 
-		VM_BUG_ON(PageLRU(page));
+		VM_BUG_ON_PAGE(PageLRU(page), page);
 		list_del(&page->lru);
 		if (unlikely(!page_evictable(page))) {
 			spin_unlock_irq(&zone->lru_lock);
@@ -1486,7 +1486,7 @@ static void move_active_pages_to_lru(struct lruvec *lruvec,
 		page = lru_to_page(list);
 		lruvec = mem_cgroup_page_lruvec(page, zone);
 
-		VM_BUG_ON(PageLRU(page));
+		VM_BUG_ON_PAGE(PageLRU(page), page);
 		SetPageLRU(page);
 
 		nr_pages = hpage_nr_pages(page);
@@ -2148,7 +2148,8 @@ static bool shrink_zones(struct zonelist *zonelist, struct scan_control *sc)
 		 * to global LRU.
 		 */
 		if (global_reclaim(sc)) {
-			if (!cpuset_zone_allowed_hardwall(zone, GFP_KERNEL))
+			if (!cpuset_zone_allowed(zone,
+						 GFP_KERNEL | __GFP_HARDWALL))
 				continue;
 			if (zone->all_unreclaimable &&
 					sc->priority != DEF_PRIORITY)
@@ -2219,7 +2220,7 @@ static bool all_unreclaimable(struct zonelist *zonelist,
 			gfp_zone(sc->gfp_mask), sc->nodemask) {
 		if (!populated_zone(zone))
 			continue;
-		if (!cpuset_zone_allowed_hardwall(zone, GFP_KERNEL))
+		if (!cpuset_zone_allowed(zone, GFP_KERNEL | __GFP_HARDWALL))
 			continue;
 		if (!zone->all_unreclaimable)
 			return false;
@@ -2274,7 +2275,7 @@ static unsigned long do_try_to_free_pages(struct zonelist *zonelist,
 			unsigned long lru_pages = 0;
 			for_each_zone_zonelist(zone, z, zonelist,
 					gfp_zone(sc->gfp_mask)) {
-				if (!cpuset_zone_allowed_hardwall(zone, GFP_KERNEL))
+				if (!cpuset_zone_allowed(zone, GFP_KERNEL | __GFP_HARDWALL))
 					continue;
 
 				lru_pages += zone_reclaimable_pages(zone);
@@ -3201,7 +3202,7 @@ void wakeup_kswapd(struct zone *zone, int order, enum zone_type classzone_idx)
 	if (!populated_zone(zone))
 		return;
 
-	if (!cpuset_zone_allowed_hardwall(zone, GFP_KERNEL))
+	if (!cpuset_zone_allowed(zone, GFP_KERNEL | __GFP_HARDWALL))
 		return;
 	pgdat = zone->zone_pgdat;
 	if (pgdat->kswapd_max_order < order) {
@@ -3603,7 +3604,7 @@ void check_move_unevictable_pages(struct page **pages, int nr_pages)
 		if (page_evictable(page)) {
 			enum lru_list lru = page_lru_base_type(page);
 
-			VM_BUG_ON(PageActive(page));
+			VM_BUG_ON_PAGE(PageActive(page), page);
 			ClearPageUnevictable(page);
 			del_page_from_lru_list(page, lruvec, LRU_UNEVICTABLE);
 			add_page_to_lru_list(page, lruvec, lru);

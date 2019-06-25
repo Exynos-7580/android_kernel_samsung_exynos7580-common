@@ -442,7 +442,7 @@ int __mmc_switch(struct mmc_card *card, u8 set, u8 index, u8 value,
 		return 0;
 
 	/* Must check status to be sure of no errors */
-	timeout = jiffies + msecs_to_jiffies(MMC_OPS_TIMEOUT_MS);
+	timeout = jiffies + msecs_to_jiffies(MMC_OPS_TIMEOUT_MS) + 1;
 	ignore = (index == EXT_CSD_HS_TIMING) ? MMC_RSP_CRC : 0;
 
 	do {
@@ -567,6 +567,9 @@ mmc_send_bus_test(struct mmc_card *card, struct mmc_host *host, u8 opcode,
 
 	data.sg = &sg;
 	data.sg_len = 1;
+	data.timeout_ns = 1000000;
+	data.timeout_clks = 0;
+
 	sg_init_one(&sg, data_buf, len);
 	mmc_wait_for_req(host, &mrq);
 	err = 0;
@@ -632,7 +635,7 @@ int mmc_send_hpi_cmd(struct mmc_card *card, u32 *status)
 
 	err = mmc_wait_for_cmd(card->host, &cmd, 0);
 	if (err) {
-		pr_warn("%s: error %d interrupting operation. "
+		pr_debug("%s: error %d interrupting operation. "
 			"HPI command response %#x\n", mmc_hostname(card->host),
 			err, cmd.resp[0]);
 		return err;

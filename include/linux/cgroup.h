@@ -37,28 +37,13 @@ extern void cgroup_post_fork(struct task_struct *p);
 extern void cgroup_exit(struct task_struct *p, int run_callbacks);
 extern int cgroupstats_build(struct cgroupstats *stats,
 				struct dentry *dentry);
-extern int cgroup_load_subsys(struct cgroup_subsys *ss);
-extern void cgroup_unload_subsys(struct cgroup_subsys *ss);
 
 extern int proc_cgroup_show(struct seq_file *, void *);
 
-/*
- * Define the enumeration of all cgroup subsystems.
- *
- * We define ids for builtin subsystems and then modular ones.
- */
-#define SUBSYS(_x) _x ## _subsys_id,
+/* define the enumeration of all cgroup subsystems */
+#define SUBSYS(_x) _x ## _cgrp_id,
 enum cgroup_subsys_id {
-#define IS_SUBSYS_ENABLED(option) IS_BUILTIN(option)
 #include <linux/cgroup_subsys.h>
-#undef IS_SUBSYS_ENABLED
-	CGROUP_BUILTIN_SUBSYS_COUNT,
-
-	__CGROUP_SUBSYS_TEMP_PLACEHOLDER = CGROUP_BUILTIN_SUBSYS_COUNT - 1,
-
-#define IS_SUBSYS_ENABLED(option) IS_MODULE(option)
-#include <linux/cgroup_subsys.h>
-#undef IS_SUBSYS_ENABLED
 	CGROUP_SUBSYS_COUNT,
 };
 #undef SUBSYS
@@ -372,25 +357,14 @@ struct css_set {
 	struct list_head cg_links;
 
 	/*
-	 * Set of subsystem states, one for each subsystem. This array
-	 * is immutable after creation apart from the init_css_set
-	 * during subsystem registration (at boot time) and modular subsystem
-	 * loading/unloading.
+	 * Set of subsystem states, one for each subsystem. This array is
+	 * immutable after creation apart from the init_css_set during
+	 * subsystem registration (at boot time)
 	 */
 	struct cgroup_subsys_state *subsys[CGROUP_SUBSYS_COUNT];
 
 	/* For RCU-protected deletion */
 	struct rcu_head rcu_head;
-};
-
-/*
- * cgroup_map_cb is an abstract callback API for reporting map-valued
- * control files
- */
-
-struct cgroup_map_cb {
-	int (*fill)(struct cgroup_map_cb *cb, const char *key, u64 value);
-	void *state;
 };
 
 /*
@@ -432,9 +406,6 @@ struct cftype {
 	unsigned int flags;
 
 	int (*open)(struct inode *inode, struct file *file);
-	ssize_t (*read)(struct cgroup *cgrp, struct cftype *cft,
-			struct file *file,
-			char __user *buf, size_t nbytes, loff_t *ppos);
 	/*
 	 * read_u64() is a shortcut for the common case of returning a
 	 * single integer. Use it in place of read()
@@ -445,24 +416,11 @@ struct cftype {
 	 */
 	s64 (*read_s64)(struct cgroup *cgrp, struct cftype *cft);
 	/*
-	 * read_map() is used for defining a map of key/value
-	 * pairs. It should call cb->fill(cb, key, value) for each
-	 * entry. The key/value pairs (and their ordering) should not
-	 * change between reboots.
-	 */
-	int (*read_map)(struct cgroup *cont, struct cftype *cft,
-			struct cgroup_map_cb *cb);
-	/*
 	 * read_seq_string() is used for outputting a simple sequence
 	 * using seqfile.
 	 */
 	int (*read_seq_string)(struct cgroup *cont, struct cftype *cft,
 			       struct seq_file *m);
-
-	ssize_t (*write)(struct cgroup *cgrp, struct cftype *cft,
-			 struct file *file,
-			 const char __user *buf, size_t nbytes, loff_t *ppos);
-
 	/*
 	 * write_u64() is a shortcut for the common case of accepting
 	 * a single integer (as parsed by simple_strtoull) from
@@ -488,8 +446,6 @@ struct cftype {
 	 * kick type for multiplexing.
 	 */
 	int (*trigger)(struct cgroup *cgrp, unsigned int event);
-
-	int (*release)(struct inode *inode, struct file *file);
 
 	/*
 	 * register_event() callback will be used to add new userspace
@@ -596,7 +552,6 @@ struct cgroup_subsys {
 		     struct task_struct *task);
 	void (*bind)(struct cgroup *root);
 
-	int subsys_id;
 	int disabled;
 	int early_init;
 	/*
@@ -620,6 +575,8 @@ struct cgroup_subsys {
 	bool broken_hierarchy;
 	bool warned_broken_hierarchy;
 
+	/* the following two fields are initialized automtically during boot */
+	int id;
 #define MAX_CGROUP_TYPE_NAMELEN 32
 	const char *name;
 
@@ -639,15 +596,10 @@ struct cgroup_subsys {
 	/* base cftypes, automatically [de]registered with subsys itself */
 	struct cftype *base_cftypes;
 	struct cftype_set base_cftset;
-
-	/* should be defined only by modular subsystems */
-	struct module *module;
 };
 
-#define SUBSYS(_x) extern struct cgroup_subsys _x ## _subsys;
-#define IS_SUBSYS_ENABLED(option) IS_BUILTIN(option)
+#define SUBSYS(_x) extern struct cgroup_subsys _x ## _cgrp_subsys;
 #include <linux/cgroup_subsys.h>
-#undef IS_SUBSYS_ENABLED
 #undef SUBSYS
 
 static inline struct cgroup_subsys_state *cgroup_subsys_state(

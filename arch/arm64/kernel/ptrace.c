@@ -537,6 +537,7 @@ static int fpr_set(struct task_struct *target, const struct user_regset *regset,
 		return ret;
 
 	target->thread.fpsimd_state.user_fpsimd = newstate;
+	fpsimd_flush_task_state(target);
 	return ret;
 }
 
@@ -820,6 +821,7 @@ static int compat_vfp_set(struct task_struct *target,
 		uregs->fpcr = fpscr & VFP_FPSCR_CTRL_MASK;
 	}
 
+	fpsimd_flush_task_state(target);
 	return ret;
 }
 
@@ -1156,12 +1158,12 @@ asmlinkage int syscall_trace_enter(struct pt_regs *regs)
 {
 	unsigned int saved_syscallno = regs->syscallno;
 
+	if (test_thread_flag_relaxed(TIF_SYSCALL_TRACE))
+		tracehook_report_syscall(regs, PTRACE_SYSCALL_ENTER);
+
 	/* Do the secure computing check first; failures should be fast. */
 	if (secure_computing() == -1)
 		return RET_SKIP_SYSCALL_TRACE;
-
-	if (test_thread_flag_relaxed(TIF_SYSCALL_TRACE))
-		tracehook_report_syscall(regs, PTRACE_SYSCALL_ENTER);
 
 	if (IS_SKIP_SYSCALL(regs->syscallno)) {
 		/*

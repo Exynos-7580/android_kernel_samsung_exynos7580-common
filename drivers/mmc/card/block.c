@@ -118,6 +118,7 @@ struct mmc_blk_data {
 	unsigned int	part_curr;
 	struct device_attribute force_ro;
 	struct device_attribute power_ro_lock;
+	struct device_attribute num_wr_reqs_to_start_packing;
 	int	area_type;
 };
 
@@ -282,6 +283,38 @@ static ssize_t force_ro_store(struct device *dev, struct device_attribute *attr,
 out:
 	mmc_blk_put(md);
 	return ret;
+}
+
+static ssize_t
+num_wr_reqs_to_start_packing_show(struct device *dev,
+		  struct device_attribute *attr, char *buf)
+{
+	struct mmc_blk_data *md = mmc_blk_get(dev_to_disk(dev));
+	int num_wr_reqs_to_start_packing;
+	int ret;
+
+	num_wr_reqs_to_start_packing = md->queue.num_wr_reqs_to_start_packing;
+
+	ret = snprintf(buf, PAGE_SIZE, "%d\n", num_wr_reqs_to_start_packing);
+
+	mmc_blk_put(md);
+	return ret;
+}
+
+static ssize_t
+num_wr_reqs_to_start_packing_store(struct device *dev,
+				 struct device_attribute *attr,
+				 const char *buf, size_t count)
+{
+	int value;
+	struct mmc_blk_data *md = mmc_blk_get(dev_to_disk(dev));
+
+	sscanf(buf, "%d", &value);
+	if (value >= 0)
+		md->queue.num_wr_reqs_to_start_packing = value;
+
+	mmc_blk_put(md);
+	return count;
 }
 
 static int mmc_blk_open(struct block_device *bdev, fmode_t mode)
@@ -1143,12 +1176,6 @@ retry:
 			goto out;
 	}
 
-	if (mmc_can_sanitize(card)) {
-		trace_mmc_blk_erase_start(EXT_CSD_SANITIZE_START, 0, 0);
-		err = mmc_switch(card, EXT_CSD_CMD_SET_NORMAL,
-				 EXT_CSD_SANITIZE_START, 1, 0);
-		trace_mmc_blk_erase_end(EXT_CSD_SANITIZE_START, 0, 0);
-	}
 out_retry:
 	if (err && !mmc_blk_reset(md, card->host, type))
 		goto retry;
@@ -1443,6 +1470,7 @@ static void mmc_blk_rw_rq_prep(struct mmc_queue_req *mqrq,
 	brq->stop.flags = MMC_RSP_SPI_R1B | MMC_RSP_R1B | MMC_CMD_AC;
 	brq->data.blocks = blk_rq_sectors(req);
 
+	brq->data.fault_injected = false;
 	/*
 	 * The block layer doesn't support all sector count
 	 * restrictions, so we need to be prepared for too big
@@ -1613,6 +1641,47 @@ static inline u8 mmc_calc_packed_hdr_segs(struct request_queue *q,
 	return nr_segs;
 }
 
+static void mmc_blk_write_packing_control(struct mmc_queue *mq,
+					  struct request *req)
+{
+	struct mmc_host *host = mq->card->host;
+	int data_dir;
+
+	if (!(host->caps2 & MMC_CAP2_PACKED_WR))
+		return;
+
+	/*
+	 * In case the packing control is not supported by the host, it should
+	 * not have an effect on the write packing. Therefore we have to enable
+	 * the write packing
+	 */
+	if (!(host->caps2 & MMC_CAP2_PACKED_WR_CONTROL)) {
+		mq->wr_packing_enabled = true;
+		return;
+	}
+
+	if (!req || (req && (req->cmd_flags & REQ_FLUSH))) {
+		if (mq->num_of_potential_packed_wr_reqs >
+				mq->num_wr_reqs_to_start_packing)
+			mq->wr_packing_enabled = true;
+		return;
+	}
+
+	data_dir = rq_data_dir(req);
+
+	if (data_dir == READ) {
+		mq->num_of_potential_packed_wr_reqs = 0;
+		mq->wr_packing_enabled = false;
+		return;
+	} else if (data_dir == WRITE) {
+		mq->num_of_potential_packed_wr_reqs++;
+	}
+
+	if (mq->num_of_potential_packed_wr_reqs >
+			mq->num_wr_reqs_to_start_packing)
+		mq->wr_packing_enabled = true;
+}
+
 static u8 mmc_blk_prep_packed_list(struct mmc_queue *mq, struct request *req)
 {
 	struct request_queue *q = mq->queue;
@@ -1628,6 +1697,9 @@ static u8 mmc_blk_prep_packed_list(struct mmc_queue *mq, struct request *req)
 	u8 reqs = 0;
 
 	if (!(md->flags & MMC_BLK_PACKED_CMD))
+		goto no_packed;
+
+	if (!mq->wr_packing_enabled)
 		goto no_packed;
 
 	if ((rq_data_dir(cur) == WRITE) &&
@@ -1698,6 +1770,8 @@ static u8 mmc_blk_prep_packed_list(struct mmc_queue *mq, struct request *req)
 		if (phys_segments > max_phys_segs)
 			break;
 
+		if (rq_data_dir(next) == WRITE)
+			mq->num_of_potential_packed_wr_reqs++;
 		list_add_tail(&next->queuelist, &mqrq->packed->list);
 		cur = next;
 		reqs++;
@@ -1789,6 +1863,7 @@ static void mmc_blk_packed_hdr_wrq_prep(struct mmc_queue_req *mqrq,
 	brq->data.blksz = 512;
 	brq->data.blocks = packed->blocks + hdr_blocks;
 	brq->data.flags |= MMC_DATA_WRITE;
+	brq->data.fault_injected = false;
 
 	brq->stop.opcode = MMC_STOP_TRANSMISSION;
 	brq->stop.arg = 0;
@@ -1822,11 +1897,12 @@ static int mmc_blk_cmd_err(struct mmc_blk_data *md, struct mmc_card *card,
 	 */
 	if (mmc_card_sd(card)) {
 		u32 blocks;
-
-		blocks = mmc_sd_num_wr_blocks(card);
-		if (blocks != (u32)-1) {
-			ret = blk_end_request(req, 0, blocks << 9);
-		}
+		if (!brq->data.fault_injected) {
+			blocks = mmc_sd_num_wr_blocks(card);
+			if (blocks != (u32)-1)
+				ret = blk_end_request(req, 0, blocks << 9);
+		} else
+			ret = blk_end_request(req, 0, brq->data.bytes_xfered);
 	} else {
 		if (!mmc_packed_cmd(mq_rq->cmd_type))
 			ret = blk_end_request(req, 0, brq->data.bytes_xfered);
@@ -2282,6 +2358,8 @@ static int mmc_blk_issue_rq(struct mmc_queue *mq, struct request *req)
 		goto out;
 	}
 
+	mmc_blk_write_packing_control(mq, req);
+
 	mq->flags &= ~MMC_QUEUE_NEW_REQUEST;
 	if (cmd_flags & REQ_DISCARD) {
 		/* complete ongoing async transfer before issuing discard */
@@ -2552,6 +2630,8 @@ static void mmc_blk_remove_req(struct mmc_blk_data *md)
 
 	if (md) {
 		card = md->queue.card;
+		device_remove_file(disk_to_dev(md->disk),
+				   &md->num_wr_reqs_to_start_packing);
 		if (md->disk->flags & GENHD_FL_UP) {
 			device_remove_file(disk_to_dev(md->disk), &md->force_ro);
 			if ((md->area_type & MMC_BLK_DATA_AREA_BOOT) &&
@@ -2620,6 +2700,20 @@ static int mmc_add_disk(struct mmc_blk_data *md)
 		if (ret)
 			goto power_ro_lock_fail;
 	}
+
+	md->num_wr_reqs_to_start_packing.show =
+		num_wr_reqs_to_start_packing_show;
+	md->num_wr_reqs_to_start_packing.store =
+		num_wr_reqs_to_start_packing_store;
+	sysfs_attr_init(&md->num_wr_reqs_to_start_packing.attr);
+	md->num_wr_reqs_to_start_packing.attr.name =
+		"num_wr_reqs_to_start_packing";
+	md->num_wr_reqs_to_start_packing.attr.mode = S_IRUGO | S_IWUSR;
+	ret = device_create_file(disk_to_dev(md->disk),
+				 &md->num_wr_reqs_to_start_packing);
+	if (ret)
+		goto power_ro_lock_fail;
+
 	return ret;
 
 power_ro_lock_fail:
@@ -2687,6 +2781,10 @@ static const struct mmc_fixup blk_fixups[] =
 		  MMC_QUIRK_SEC_ERASE_TRIM_BROKEN),
 	MMC_FIXUP("VZL00M", CID_MANFID_SAMSUNG, CID_OEMID_ANY, add_quirk_mmc,
 		  MMC_QUIRK_SEC_ERASE_TRIM_BROKEN),
+
+	/* Some INAND MCP devices advertise incorrect timeout values */
+	MMC_FIXUP("SEM04G", 0x45, CID_OEMID_ANY, add_quirk_mmc,
+		  MMC_QUIRK_INAND_DATA_TIMEOUT),
 
 	END_FIXUP
 };

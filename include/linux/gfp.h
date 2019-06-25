@@ -1,6 +1,7 @@
 #ifndef __LINUX_GFP_H
 #define __LINUX_GFP_H
 
+#include <linux/mmdebug.h>
 #include <linux/mmzone.h>
 #include <linux/stddef.h>
 #include <linux/linkage.h>
@@ -64,7 +65,10 @@ struct vm_area_struct;
  * cannot handle allocation failures.  This modifier is deprecated and no new
  * users should be added.
  *
- * __GFP_NORETRY: The VM implementation must not retry indefinitely.
+ * __GFP_NORETRY: The VM implementation must not retry indefinitely and will
+ * return NULL when direct reclaim and memory compaction have failed to allow
+ * the allocation to succeed.  The OOM killer is not called with the current
+ * implementation.
  *
  * __GFP_MOVABLE: Flag that this page will be movable by the page migration
  * mechanism or reclaimed
@@ -102,7 +106,8 @@ struct vm_area_struct;
  */
 #define __GFP_NOTRACK_FALSE_POSITIVE (__GFP_NOTRACK)
 
-#define __GFP_BITS_SHIFT 26	/* Room for N __GFP_FOO bits */
+/* Room for N __GFP_FOO bits */
+#define __GFP_BITS_SHIFT 27
 #define __GFP_BITS_MASK ((__force gfp_t)((1 << __GFP_BITS_SHIFT) - 1))
 
 /* This equals 0, but use constants in case they ever change */
@@ -124,12 +129,6 @@ struct vm_area_struct;
 #define GFP_TRANSHUGE	(GFP_HIGHUSER_MOVABLE | __GFP_COMP | \
 			 __GFP_NOMEMALLOC | __GFP_NORETRY | __GFP_NOWARN | \
 			 __GFP_NO_KSWAPD)
-
-#ifdef CONFIG_NUMA
-#define GFP_THISNODE	(__GFP_THISNODE | __GFP_NOWARN | __GFP_NORETRY)
-#else
-#define GFP_THISNODE	((__force gfp_t)0)
-#endif
 
 /* This mask makes up all the page movable related flags */
 #define GFP_MOVABLE_MASK (__GFP_RECLAIMABLE|__GFP_MOVABLE|__GFP_CMA)
@@ -316,22 +315,30 @@ __alloc_pages(gfp_t gfp_mask, unsigned int order,
 	return __alloc_pages_nodemask(gfp_mask, order, zonelist, NULL);
 }
 
-static inline struct page *alloc_pages_node(int nid, gfp_t gfp_mask,
-						unsigned int order)
+/*
+ * Allocate pages, preferring the node given as nid. The node must be valid and
+ * online. For more general interface, see alloc_pages_node().
+ */
+static inline struct page *
+__alloc_pages_node(int nid, gfp_t gfp_mask, unsigned int order)
 {
-	/* Unknown node is current node */
-	if (nid < 0)
-		nid = numa_node_id();
+	VM_BUG_ON(nid < 0 || nid >= MAX_NUMNODES);
+	VM_WARN_ON(!node_online(nid));
 
 	return __alloc_pages(gfp_mask, order, node_zonelist(nid, gfp_mask));
 }
 
-static inline struct page *alloc_pages_exact_node(int nid, gfp_t gfp_mask,
+/*
+ * Allocate pages, preferring the node given as nid. When nid == NUMA_NO_NODE,
+ * prefer the current CPU's node. Otherwise node must be valid and online.
+ */
+static inline struct page *alloc_pages_node(int nid, gfp_t gfp_mask,
 						unsigned int order)
 {
-	VM_BUG_ON(nid < 0 || nid >= MAX_NUMNODES || !node_online(nid));
+	if (nid == NUMA_NO_NODE)
+		nid = numa_node_id();
 
-	return __alloc_pages(gfp_mask, order, node_zonelist(nid, gfp_mask));
+	return __alloc_pages_node(nid, gfp_mask, order);
 }
 
 #ifdef CONFIG_NUMA
@@ -362,7 +369,6 @@ extern unsigned long get_zeroed_page(gfp_t gfp_mask);
 
 void *alloc_pages_exact(size_t size, gfp_t gfp_mask);
 void free_pages_exact(void *virt, size_t size);
-/* This is different from alloc_pages_exact_node !!! */
 void *alloc_pages_exact_nid(int nid, size_t size, gfp_t gfp_mask);
 
 #define __get_free_page(gfp_mask) \

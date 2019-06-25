@@ -212,6 +212,9 @@ __do_page_cache_readahead(struct address_space *mapping, struct file *filp,
 		if (!page)
 			break;
 		page->index = page_offset;
+
+		page->flags |= (1L << PG_readahead);
+
 		list_add(&page->lru, &page_pool);
 		if (page_idx == nr_to_read - lookahead_size)
 			SetPageReadahead(page);
@@ -427,6 +430,7 @@ ondemand_readahead(struct address_space *mapping,
 		   unsigned long req_size)
 {
 	unsigned long max = max_sane_readahead(ra->ra_pages);
+	pgoff_t prev_offset;
 
 	/*
 	 * start of file
@@ -478,8 +482,11 @@ ondemand_readahead(struct address_space *mapping,
 
 	/*
 	 * sequential cache miss
+	 * trivial case: (offset - prev_offset) == 1
+	 * unaligned reads: (offset - prev_offset) == 0
 	 */
-	if (offset - (ra->prev_pos >> PAGE_CACHE_SHIFT) <= 1UL)
+	prev_offset = (unsigned long long)ra->prev_pos >> PAGE_CACHE_SHIFT;
+	if (offset - prev_offset <= 1UL)
 		goto initial_readahead;
 
 	/*

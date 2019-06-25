@@ -117,11 +117,13 @@ static void __init zone_sizes_init(unsigned long min, unsigned long max)
 }
 
 #ifdef CONFIG_HAVE_ARCH_PFN_VALID
-#define PFN_MASK ((1UL << (64 - PAGE_SHIFT)) - 1)
-
 int pfn_valid(unsigned long pfn)
 {
-	return (pfn & PFN_MASK) == pfn && memblock_is_memory(pfn << PAGE_SHIFT);
+	phys_addr_t addr = pfn << PAGE_SHIFT;
+
+	if ((addr >> PAGE_SHIFT) != pfn)
+		return 0;
+	return memblock_is_memory(addr);
 }
 EXPORT_SYMBOL(pfn_valid);
 #endif
@@ -143,19 +145,15 @@ static void arm64_memory_present(void)
 
 void __init arm64_memblock_init(void)
 {
-	/* Register the kernel text, kernel data and initrd with memblock */
+	/*
+	 * Register the kernel text, kernel data, initrd, and initial
+	 * pagetables with memblock.
+	 */
 	memblock_reserve(__pa(_text), _end - _text);
 #ifdef CONFIG_BLK_DEV_INITRD
 	if (initrd_start)
 		memblock_reserve(__virt_to_phys(initrd_start), initrd_end - initrd_start);
 #endif
-
-	/*
-	 * Reserve the page tables.  These are already in use,
-	 * and can only be in node 0.
-	 */
-	memblock_reserve(__pa(swapper_pg_dir), SWAPPER_DIR_SIZE);
-	memblock_reserve(__pa(idmap_pg_dir), IDMAP_DIR_SIZE);
 
 	early_init_fdt_scan_reserved_mem();
 	dma_contiguous_reserve(0);

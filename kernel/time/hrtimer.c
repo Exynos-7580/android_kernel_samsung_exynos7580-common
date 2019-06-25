@@ -280,23 +280,25 @@ lock_hrtimer_base(const struct hrtimer *timer, unsigned long *flags)
 /*
  * Divide a ktime value by a nanosecond value
  */
-u64 ktime_divns(const ktime_t kt, s64 div)
+s64 __ktime_divns(const ktime_t kt, s64 div)
 {
-	u64 dclc;
 	int sft = 0;
+	s64 dclc;
+	u64 tmp;
 
 	dclc = ktime_to_ns(kt);
+	tmp = dclc < 0 ? -dclc : dclc;
+
 	/* Make sure the divisor is less than 2^32: */
 	while (div >> 32) {
 		sft++;
 		div >>= 1;
 	}
-	dclc >>= sft;
-	do_div(dclc, (unsigned long) div);
-
-	return dclc;
+	tmp >>= sft;
+	do_div(tmp, (unsigned long) div);
+	return dclc < 0 ? -tmp : tmp;
 }
-EXPORT_SYMBOL_GPL(ktime_divns);
+EXPORT_SYMBOL_GPL(__ktime_divns);
 #endif /* BITS_PER_LONG >= 64 */
 
 /*
@@ -788,6 +790,9 @@ u64 hrtimer_forward(struct hrtimer *timer, ktime_t now, ktime_t interval)
 	if (delta.tv64 < 0)
 		return 0;
 
+	if (WARN_ON(timer->state & HRTIMER_STATE_ENQUEUED))
+		return 0;
+
 	if (interval.tv64 < timer->base->resolution.tv64)
 		interval.tv64 = timer->base->resolution.tv64;
 
@@ -1198,11 +1203,14 @@ static void __run_hrtimer(struct hrtimer *timer, ktime_t *now)
 	 * Note: We clear the CALLBACK bit after enqueue_hrtimer and
 	 * we do not reprogramm the event hardware. Happens either in
 	 * hrtimer_start_range_ns() or in hrtimer_interrupt()
+	 *
+	 * Note: Because we dropped the cpu_base->lock above,
+	 * hrtimer_start_range_ns() can have popped in and enqueued the timer
+	 * for us already.
 	 */
-	if (restart != HRTIMER_NORESTART) {
-		BUG_ON(timer->state != HRTIMER_STATE_CALLBACK);
+	if (restart != HRTIMER_NORESTART &&
+	    !(timer->state & HRTIMER_STATE_ENQUEUED))
 		enqueue_hrtimer(timer, base);
-	}
 
 	WARN_ON_ONCE(!(timer->state & HRTIMER_STATE_CALLBACK));
 

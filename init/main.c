@@ -70,7 +70,6 @@
 #include <linux/shmem_fs.h>
 #include <linux/slab.h>
 #include <linux/perf_event.h>
-#include <linux/file.h>
 #include <linux/ptrace.h>
 #include <linux/blkdev.h>
 #include <linux/elevator.h>
@@ -491,7 +490,7 @@ asmlinkage void __init start_kernel(void)
 	debug_objects_early_init();
 
 	/*
-	 * Set up the the initial canary ASAP:
+	 * Set up the initial canary ASAP:
 	 */
 	boot_init_stack_canary();
 
@@ -562,6 +561,15 @@ asmlinkage void __init start_kernel(void)
 	hrtimers_init();
 	softirq_init();
 	timekeeping_init();
+
+	/*
+	 * For best initial stack canary entropy, prepare it after:
+	 * - setup_arch() for any UEFI RNG entropy and boot cmdline access
+	 * - timekeeping_init() for ktime entropy used in rand_initialize()
+	 * - rand_initialize() to get any arch-specific entropy like RDRAND
+	 */
+	rand_initialize();
+
 	time_init();
 	sched_clock_postinit();
 	profile_init();
@@ -790,7 +798,6 @@ static void __init do_basic_setup(void)
 	do_ctors();
 	usermodehelper_enable();
 	do_initcalls();
-	random_int_secret_init();
 }
 
 static void __init do_pre_smp_initcalls(void)
@@ -871,8 +878,6 @@ static int __ref kernel_init(void *unused)
 	mark_rodata_ro();
 	system_state = SYSTEM_RUNNING;
 	numa_default_policy();
-
-	flush_delayed_fput();
 
 	if (ramdisk_execute_command) {
 		if (!run_init_process(ramdisk_execute_command))

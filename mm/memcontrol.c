@@ -63,8 +63,8 @@
 
 #include <trace/events/vmscan.h>
 
-struct cgroup_subsys mem_cgroup_subsys __read_mostly;
-EXPORT_SYMBOL(mem_cgroup_subsys);
+struct cgroup_subsys memory_cgrp_subsys __read_mostly;
+EXPORT_SYMBOL(memory_cgrp_subsys);
 
 #define MEM_CGROUP_RECLAIM_RETRIES	5
 static struct mem_cgroup *root_mem_cgroup __read_mostly;
@@ -1067,7 +1067,7 @@ static void memcg_check_events(struct mem_cgroup *memcg, struct page *page)
 struct mem_cgroup *mem_cgroup_from_cont(struct cgroup *cont)
 {
 	return mem_cgroup_from_css(
-		cgroup_subsys_state(cont, mem_cgroup_subsys_id));
+		cgroup_subsys_state(cont, memory_cgrp_subsys));
 }
 
 struct mem_cgroup *mem_cgroup_from_task(struct task_struct *p)
@@ -1080,7 +1080,7 @@ struct mem_cgroup *mem_cgroup_from_task(struct task_struct *p)
 	if (unlikely(!p))
 		return NULL;
 
-	return mem_cgroup_from_css(task_subsys_state(p, mem_cgroup_subsys_id));
+	return mem_cgroup_from_css(task_subsys_state(p, memory_cgrp_id));
 }
 
 struct mem_cgroup *try_get_mem_cgroup_from_mm(struct mm_struct *mm)
@@ -1674,7 +1674,7 @@ void mem_cgroup_print_oom_info(struct mem_cgroup *memcg, struct task_struct *p)
 	rcu_read_lock();
 
 	mem_cgrp = memcg->css.cgroup;
-	task_cgrp = task_cgroup(p, mem_cgroup_subsys_id);
+	task_cgrp = task_cgroup(p, memory_cgrp_id);
 
 	ret = cgroup_path(task_cgrp, memcg_name, PATH_MAX);
 	if (ret < 0) {
@@ -1797,8 +1797,8 @@ static void mem_cgroup_out_of_memory(struct mem_cgroup *memcg, gfp_t gfp_mask,
 	 * select it.  The goal is to allow it to allocate so that it may
 	 * quickly exit and free its memory.
 	 */
-	if (fatal_signal_pending(current) || current->flags & PF_EXITING) {
-		set_thread_flag(TIF_MEMDIE);
+	if (fatal_signal_pending(current) || task_will_free_mem(current)) {
+		mark_tsk_oom_victim(current);
 		return;
 	}
 
@@ -1832,13 +1832,18 @@ static void mem_cgroup_out_of_memory(struct mem_cgroup *memcg, gfp_t gfp_mask,
 				break;
 			};
 			points = oom_badness(task, memcg, NULL, totalpages);
-			if (points > chosen_points) {
-				if (chosen)
-					put_task_struct(chosen);
-				chosen = task;
-				chosen_points = points;
-				get_task_struct(chosen);
-			}
+			if (!points || points < chosen_points)
+				continue;
+			/* Prefer thread group leaders for display purposes */
+			if (points == chosen_points &&
+			    thread_group_leader(chosen))
+				continue;
+
+			if (chosen)
+				put_task_struct(chosen);
+			chosen = task;
+			chosen_points = points;
+			get_task_struct(chosen);
 		}
 		cgroup_iter_end(cgroup, &it);
 	}
@@ -2857,7 +2862,7 @@ static struct mem_cgroup *mem_cgroup_lookup(unsigned short id)
 	/* ID 0 is unused ID */
 	if (!id)
 		return NULL;
-	css = css_lookup(&mem_cgroup_subsys, id);
+	css = css_lookup(&memory_cgrp_subsys, id);
 	if (!css)
 		return NULL;
 	return mem_cgroup_from_css(css);
@@ -2870,7 +2875,7 @@ struct mem_cgroup *try_get_mem_cgroup_from_page(struct page *page)
 	unsigned short id;
 	swp_entry_t ent;
 
-	VM_BUG_ON(!PageLocked(page));
+	VM_BUG_ON_PAGE(!PageLocked(page), page);
 
 	pc = lookup_page_cgroup(page);
 	lock_page_cgroup(pc);
@@ -2904,7 +2909,7 @@ static void __mem_cgroup_commit_charge(struct mem_cgroup *memcg,
 	bool anon;
 
 	lock_page_cgroup(pc);
-	VM_BUG_ON(PageCgroupUsed(pc));
+	VM_BUG_ON_PAGE(PageCgroupUsed(pc), page);
 	/*
 	 * we don't need page_cgroup_lock about tail pages, becase they are not
 	 * accessed by any other context at this point.
@@ -2939,7 +2944,7 @@ static void __mem_cgroup_commit_charge(struct mem_cgroup *memcg,
 	if (lrucare) {
 		if (was_on_lru) {
 			lruvec = mem_cgroup_zone_lruvec(zone, pc->mem_cgroup);
-			VM_BUG_ON(PageLRU(page));
+			VM_BUG_ON_PAGE(PageLRU(page), page);
 			SetPageLRU(page);
 			add_page_to_lru_list(page, lruvec, page_lru(page));
 		}
@@ -3787,7 +3792,7 @@ static int mem_cgroup_move_account(struct page *page,
 	bool anon = PageAnon(page);
 
 	VM_BUG_ON(from == to);
-	VM_BUG_ON(PageLRU(page));
+	VM_BUG_ON_PAGE(PageLRU(page), page);
 	/*
 	 * The page is isolated from LRU. So, collapse function
 	 * will not handle this page. But page splitting can happen.
@@ -3879,7 +3884,7 @@ static int mem_cgroup_move_parent(struct page *page,
 		parent = root_mem_cgroup;
 
 	if (nr_pages > 1) {
-		VM_BUG_ON(!PageTransHuge(page));
+		VM_BUG_ON_PAGE(!PageTransHuge(page), page);
 		flags = compound_lock_irqsave(page);
 	}
 
@@ -3913,7 +3918,7 @@ static int mem_cgroup_charge_common(struct page *page, struct mm_struct *mm,
 
 	if (PageTransHuge(page)) {
 		nr_pages <<= compound_order(page);
-		VM_BUG_ON(!PageTransHuge(page));
+		VM_BUG_ON_PAGE(!PageTransHuge(page), page);
 		/*
 		 * Never OOM-kill a process for a huge page.  The
 		 * fault handler will fall back to regular pages.
@@ -3933,8 +3938,8 @@ int mem_cgroup_newpage_charge(struct page *page,
 {
 	if (mem_cgroup_disabled())
 		return 0;
-	VM_BUG_ON(page_mapped(page));
-	VM_BUG_ON(page->mapping && !PageAnon(page));
+	VM_BUG_ON_PAGE(page_mapped(page), page);
+	VM_BUG_ON_PAGE(page->mapping && !PageAnon(page), page);
 	VM_BUG_ON(!mm);
 	return mem_cgroup_charge_common(page, mm, gfp_mask,
 					MEM_CGROUP_CHARGE_TYPE_ANON);
@@ -4138,7 +4143,7 @@ __mem_cgroup_uncharge_common(struct page *page, enum charge_type ctype,
 
 	if (PageTransHuge(page)) {
 		nr_pages <<= compound_order(page);
-		VM_BUG_ON(!PageTransHuge(page));
+		VM_BUG_ON_PAGE(!PageTransHuge(page), page);
 	}
 	/*
 	 * Check if our page_cgroup is valid
@@ -4230,7 +4235,7 @@ void mem_cgroup_uncharge_page(struct page *page)
 	/* early check. */
 	if (page_mapped(page))
 		return;
-	VM_BUG_ON(page->mapping && !PageAnon(page));
+	VM_BUG_ON_PAGE(page->mapping && !PageAnon(page), page);
 	/*
 	 * If the page is in swap cache, uncharge should be deferred
 	 * to the swap path, which also properly accounts swap usage
@@ -4250,8 +4255,8 @@ void mem_cgroup_uncharge_page(struct page *page)
 
 void mem_cgroup_uncharge_cache_page(struct page *page)
 {
-	VM_BUG_ON(page_mapped(page));
-	VM_BUG_ON(page->mapping);
+	VM_BUG_ON_PAGE(page_mapped(page), page);
+	VM_BUG_ON_PAGE(page->mapping, page);
 	__mem_cgroup_uncharge_common(page, MEM_CGROUP_CHARGE_TYPE_CACHE, false);
 }
 
@@ -4658,8 +4663,10 @@ static int mem_cgroup_resize_limit(struct mem_cgroup *memcg,
 		}
 		mutex_unlock(&set_limit_mutex);
 
-		if (!ret)
+		if (!ret) {
+			vmpressure_update_mem_limit(memcg, val);
 			break;
+		}
 
 		mem_cgroup_reclaim(memcg, GFP_KERNEL,
 				   MEM_CGROUP_RECLAIM_SHRINK);
@@ -6151,7 +6158,7 @@ static void __mem_cgroup_free(struct mem_cgroup *memcg)
 	size_t size = memcg_size();
 
 	mem_cgroup_remove_from_trees(memcg);
-	free_css_id(&mem_cgroup_subsys, &memcg->css);
+	free_css_id(&memory_cgrp_subsys, &memcg->css);
 
 	for_each_node(node)
 		free_mem_cgroup_per_zone_info(memcg, node);
@@ -6282,7 +6289,7 @@ mem_cgroup_css_alloc(struct cgroup *cont)
 	memcg->move_charge_at_immigrate = 0;
 	mutex_init(&memcg->thresholds_lock);
 	spin_lock_init(&memcg->move_lock);
-	vmpressure_init(&memcg->vmpressure);
+	vmpressure_init(&memcg->vmpressure, cont->parent == NULL);
 
 	return &memcg->css;
 
@@ -6330,10 +6337,10 @@ mem_cgroup_css_online(struct cgroup *cont)
 		 * unfortunate state in our controller.
 		 */
 		if (parent != root_mem_cgroup)
-			mem_cgroup_subsys.broken_hierarchy = true;
+			memory_cgrp_subsys.broken_hierarchy = true;
 	}
 
-	error = memcg_init_kmem(memcg, &mem_cgroup_subsys);
+	error = memcg_init_kmem(memcg, &memory_cgrp_subsys);
 	mutex_unlock(&memcg_create_mutex);
 	return error;
 }
@@ -6604,7 +6611,7 @@ static enum mc_target_type get_mctgt_type_thp(struct vm_area_struct *vma,
 	enum mc_target_type ret = MC_TARGET_NONE;
 
 	page = pmd_page(pmd);
-	VM_BUG_ON(!page || !PageHead(page));
+	VM_BUG_ON_PAGE(!page || !PageHead(page), page);
 	if (!move_anon())
 		return ret;
 	pc = lookup_page_cgroup(page);
@@ -6997,8 +7004,7 @@ static void mem_cgroup_bind(struct cgroup *root)
 		mem_cgroup_from_cont(root)->use_hierarchy = true;
 }
 
-struct cgroup_subsys mem_cgroup_subsys = {
-	.name = "memory",
+struct cgroup_subsys memory_cgrp_subsys = {
 	.subsys_id = mem_cgroup_subsys_id,
 	.css_alloc = mem_cgroup_css_alloc,
 	.css_online = mem_cgroup_css_online,
@@ -7028,7 +7034,7 @@ __setup("swapaccount=", enable_swap_account);
 
 static void __init memsw_file_init(void)
 {
-	WARN_ON(cgroup_add_cftypes(&mem_cgroup_subsys, memsw_cgroup_files));
+	WARN_ON(cgroup_add_cftypes(&memory_cgrp_subsys, memsw_cgroup_files));
 }
 
 static void __init enable_swap_cgroup(void)

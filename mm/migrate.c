@@ -454,7 +454,7 @@ void migrate_page_copy(struct page *newpage, struct page *page)
 	if (PageUptodate(page))
 		SetPageUptodate(newpage);
 	if (TestClearPageActive(page)) {
-		VM_BUG_ON(PageUnevictable(page));
+		VM_BUG_ON_PAGE(PageUnevictable(page), page);
 		SetPageActive(newpage);
 	} else if (TestClearPageUnevictable(page))
 		SetPageUnevictable(newpage);
@@ -828,7 +828,7 @@ static int __unmap_and_move(struct page *page, struct page *newpage,
 	 * free the metadata, so the page can be freed.
 	 */
 	if (!page->mapping) {
-		VM_BUG_ON(PageAnon(page));
+		VM_BUG_ON_PAGE(PageAnon(page), page);
 		if (page_has_private(page)) {
 			try_to_free_buffers(page);
 			goto uncharge;
@@ -1112,8 +1112,8 @@ static struct page *new_page_node(struct page *p, unsigned long private,
 
 	*result = &pm->status;
 
-	return alloc_pages_exact_node(pm->node,
-				GFP_HIGHUSER_MOVABLE | GFP_THISNODE, 0);
+	return __alloc_pages_node(pm->node,
+				GFP_HIGHUSER_MOVABLE | __GFP_THISNODE, 0);
 }
 
 /*
@@ -1487,10 +1487,10 @@ static struct page *alloc_misplaced_dst_page(struct page *page,
 	int nid = (int) data;
 	struct page *newpage;
 
-	newpage = alloc_pages_exact_node(nid,
-					 (GFP_HIGHUSER_MOVABLE | GFP_THISNODE |
-					  __GFP_NOMEMALLOC | __GFP_NORETRY |
-					  __GFP_NOWARN) &
+	newpage = __alloc_pages_node(nid,
+					 (GFP_HIGHUSER_MOVABLE |
+					  __GFP_THISNODE | __GFP_NOMEMALLOC |
+					  __GFP_NORETRY | __GFP_NOWARN) &
 					 ~GFP_IOFS, 0);
 	if (newpage)
 		page_nid_xchg_last(newpage, page_nid_last(page));
@@ -1555,7 +1555,7 @@ int numamigrate_isolate_page(pg_data_t *pgdat, struct page *page)
 {
 	int page_lru;
 
-	VM_BUG_ON(compound_order(page) && !PageTransHuge(page));
+	VM_BUG_ON_PAGE(compound_order(page) && !PageTransHuge(page), page);
 
 	/* Avoid migrating to a node that is nearly full */
 	if (!migrate_balanced_pgdat(pgdat, 1UL << compound_order(page)))
@@ -1671,7 +1671,8 @@ int migrate_misplaced_transhuge_page(struct mm_struct *mm,
 		goto out_dropref;
 
 	new_page = alloc_pages_node(node,
-		(GFP_TRANSHUGE | GFP_THISNODE) & ~__GFP_WAIT, HPAGE_PMD_ORDER);
+		(GFP_TRANSHUGE | __GFP_THISNODE) & ~__GFP_WAIT,
+		HPAGE_PMD_ORDER);
 	if (!new_page)
 		goto out_fail;
 

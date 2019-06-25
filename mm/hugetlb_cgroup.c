@@ -30,7 +30,6 @@ struct hugetlb_cgroup {
 #define MEMFILE_IDX(val)	(((val) >> 16) & 0xffff)
 #define MEMFILE_ATTR(val)	((val) & 0xffff)
 
-struct cgroup_subsys hugetlb_subsys __read_mostly;
 static struct hugetlb_cgroup *root_h_cgroup __read_mostly;
 
 static inline
@@ -43,14 +42,14 @@ static inline
 struct hugetlb_cgroup *hugetlb_cgroup_from_cgroup(struct cgroup *cgroup)
 {
 	return hugetlb_cgroup_from_css(cgroup_subsys_state(cgroup,
-							   hugetlb_subsys_id));
+							   hugetlb_cgrp_id));
 }
 
 static inline
 struct hugetlb_cgroup *hugetlb_cgroup_from_task(struct task_struct *task)
 {
 	return hugetlb_cgroup_from_css(task_subsys_state(task,
-							 hugetlb_subsys_id));
+							 hugetlb_cgrp_id));
 }
 
 static inline bool hugetlb_cgroup_is_root(struct hugetlb_cgroup *h_cg)
@@ -405,7 +404,7 @@ void hugetlb_cgroup_migrate(struct page *oldhpage, struct page *newhpage)
 	if (hugetlb_cgroup_disabled())
 		return;
 
-	VM_BUG_ON(!PageHuge(oldhpage));
+	VM_BUG_ON_PAGE(!PageHuge(oldhpage), oldhpage);
 	spin_lock(&hugetlb_lock);
 	h_cg = hugetlb_cgroup_from_page(oldhpage);
 	set_hugetlb_cgroup(oldhpage, NULL);
@@ -417,10 +416,8 @@ void hugetlb_cgroup_migrate(struct page *oldhpage, struct page *newhpage)
 	return;
 }
 
-struct cgroup_subsys hugetlb_subsys = {
-	.name = "hugetlb",
+struct cgroup_subsys hugetlb_cgrp_subsys = {
 	.css_alloc	= hugetlb_cgroup_css_alloc,
 	.css_offline	= hugetlb_cgroup_css_offline,
 	.css_free	= hugetlb_cgroup_css_free,
-	.subsys_id	= hugetlb_subsys_id,
 };

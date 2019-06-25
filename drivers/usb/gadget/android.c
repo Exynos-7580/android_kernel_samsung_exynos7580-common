@@ -1016,6 +1016,10 @@ static int mass_storage_lun_init(struct android_usb_function *f,
 
 static void mass_storage_function_cleanup(struct android_usb_function *f)
 {
+	struct mass_storage_function_config *config;
+
+	config = f->config;
+	fsg_common_put(config->common);
 	kfree(f->config);
 	f->config = NULL;
 }
@@ -1064,7 +1068,7 @@ static void mass_storage_function_enable(struct android_usb_function *f)
 
 	pr_debug("fsg.nluns:%d\n", config->fsg.nluns);
 	for (i = prev_nluns; i < config->fsg.nluns; i++) {
-		snprintf(lun_name, sizeof(buf), "lun%d", (i-prev_nluns));
+		snprintf(lun_name, sizeof(buf1), "lun%d", (i-prev_nluns));
 		pr_debug("sysfs: LUN name:%s\n", lun_name);
 		err = sysfs_create_link(&f->dev->kobj,
 			&common->luns[i].dev.kobj, lun_name);

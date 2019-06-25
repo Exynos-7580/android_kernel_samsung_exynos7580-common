@@ -1285,7 +1285,7 @@ static inline struct page *alloc_slab_page(gfp_t flags, int node,
 	if (node == NUMA_NO_NODE)
 		return alloc_pages(flags, order);
 	else
-		return alloc_pages_exact_node(node, flags, order);
+		return __alloc_pages_node(node, flags, order);
 }
 
 static struct page *allocate_slab(struct kmem_cache *s, gfp_t flags, int node)
@@ -1532,7 +1532,7 @@ static inline void *acquire_slab(struct kmem_cache *s,
 		new.freelist = freelist;
 	}
 
-	VM_BUG_ON(new.frozen);
+	VM_BUG_ON_PAGE(new.frozen, &new);
 	new.frozen = 1;
 
 	if (!__cmpxchg_double_slab(s, page,
@@ -1634,31 +1634,30 @@ static void *get_any_partial(struct kmem_cache *s, gfp_t flags,
 		return NULL;
 
 	do {
-		cpuset_mems_cookie = get_mems_allowed();
+		cpuset_mems_cookie = read_mems_allowed_begin();
 		zonelist = node_zonelist(slab_node(), flags);
 		for_each_zone_zonelist(zone, z, zonelist, high_zoneidx) {
 			struct kmem_cache_node *n;
 
 			n = get_node(s, zone_to_nid(zone));
 
-			if (n && cpuset_zone_allowed_hardwall(zone, flags) &&
+			if (n && cpuset_zone_allowed(zone,
+						     flags | __GFP_HARDWALL) &&
 					n->nr_partial > s->min_partial) {
 				object = get_partial_node(s, n, c, flags);
 				if (object) {
 					/*
-					 * Return the object even if
-					 * put_mems_allowed indicated that
-					 * the cpuset mems_allowed was
-					 * updated in parallel. It's a
-					 * harmless race between the alloc
-					 * and the cpuset update.
+					 * Don't check read_mems_allowed_retry()
+					 * here - if mems_allowed was updated in
+					 * parallel, that was a harmless race
+					 * between allocation and the cpuset
+					 * update
 					 */
-					put_mems_allowed(cpuset_mems_cookie);
 					return object;
 				}
 			}
 		}
-	} while (!put_mems_allowed(cpuset_mems_cookie));
+	} while (read_mems_allowed_retry(cpuset_mems_cookie));
 #endif
 	return NULL;
 }
@@ -1783,7 +1782,7 @@ static void deactivate_slab(struct kmem_cache *s, struct page *page, void *freel
 			set_freepointer(s, freelist, prior);
 			new.counters = counters;
 			new.inuse--;
-			VM_BUG_ON(!new.frozen);
+			VM_BUG_ON_PAGE(!new.frozen, &new);
 
 		} while (!__cmpxchg_double_slab(s, page,
 			prior, counters,
@@ -1811,7 +1810,7 @@ redo:
 
 	old.freelist = page->freelist;
 	old.counters = page->counters;
-	VM_BUG_ON(!old.frozen);
+	VM_BUG_ON_PAGE(!old.frozen, &old);
 
 	/* Determine target state of the slab */
 	new.counters = old.counters;
@@ -1922,7 +1921,7 @@ static void unfreeze_partials(struct kmem_cache *s,
 
 			old.freelist = page->freelist;
 			old.counters = page->counters;
-			VM_BUG_ON(!old.frozen);
+			VM_BUG_ON_PAGE(!old.frozen, &old);
 
 			new.counters = old.counters;
 			new.freelist = old.freelist;
@@ -2191,7 +2190,7 @@ static inline void *get_freelist(struct kmem_cache *s, struct page *page)
 		counters = page->counters;
 
 		new.counters = counters;
-		VM_BUG_ON(!new.frozen);
+		VM_BUG_ON_PAGE(!new.frozen, &new);
 
 		new.inuse = page->objects;
 		new.frozen = freelist != NULL;
@@ -2285,7 +2284,7 @@ load_freelist:
 	 * page is pointing to the page from which the objects are obtained.
 	 * That page must be frozen for per cpu allocations to work.
 	 */
-	VM_BUG_ON(!c->page->frozen);
+	VM_BUG_ON_PAGE(!c->page->frozen, c->page);
 	c->freelist = get_freepointer(s, freelist);
 	c->tid = next_tid(c->tid);
 	local_irq_restore(flags);
@@ -3395,6 +3394,7 @@ int kmem_cache_shrink(struct kmem_cache *s)
 	struct list_head *slabs_by_inuse =
 		kmalloc(sizeof(struct list_head) * objects, GFP_KERNEL);
 	unsigned long flags;
+        int ret = 0;
 
 	if (!slabs_by_inuse)
 		return -ENOMEM;
@@ -3430,6 +3430,9 @@ int kmem_cache_shrink(struct kmem_cache *s)
 		for (i = objects - 1; i > 0; i--)
 			list_splice(slabs_by_inuse + i, n->partial.prev);
 
+		if (n->nr_partial || slabs_node(s, node))
+			ret = 1;
+
 		spin_unlock_irqrestore(&n->list_lock, flags);
 
 		/* Release empty slabs */
@@ -3438,7 +3441,7 @@ int kmem_cache_shrink(struct kmem_cache *s)
 	}
 
 	kfree(slabs_by_inuse);
-	return 0;
+	return ret;
 }
 EXPORT_SYMBOL(kmem_cache_shrink);
 

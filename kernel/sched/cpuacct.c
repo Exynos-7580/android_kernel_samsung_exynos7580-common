@@ -36,14 +36,14 @@ struct cpuacct {
 /* return cpu accounting group corresponding to this container */
 static inline struct cpuacct *cgroup_ca(struct cgroup *cgrp)
 {
-	return container_of(cgroup_subsys_state(cgrp, cpuacct_subsys_id),
+	return container_of(cgroup_subsys_state(cgrp, cpuacct_cgrp_id),
 			    struct cpuacct, css);
 }
 
 /* return cpu accounting group to which this task belongs */
 static inline struct cpuacct *task_ca(struct task_struct *tsk)
 {
-	return container_of(task_subsys_state(tsk, cpuacct_subsys_id),
+	return container_of(task_subsys_state(tsk, cpuacct_cgrp_id),
 			    struct cpuacct, css);
 }
 
@@ -193,7 +193,7 @@ static const char * const cpuacct_stat_desc[] = {
 };
 
 static int cpuacct_stats_show(struct cgroup *cgrp, struct cftype *cft,
-			      struct cgroup_map_cb *cb)
+			      struct seq_file *sf)
 {
 	struct cpuacct *ca = cgroup_ca(cgrp);
 	int cpu;
@@ -205,7 +205,7 @@ static int cpuacct_stats_show(struct cgroup *cgrp, struct cftype *cft,
 		val += kcpustat->cpustat[CPUTIME_NICE];
 	}
 	val = cputime64_to_clock_t(val);
-	cb->fill(cb, cpuacct_stat_desc[CPUACCT_STAT_USER], val);
+	seq_printf(sf, "%s %lld\n", cpuacct_stat_desc[CPUACCT_STAT_USER], val);
 
 	val = 0;
 	for_each_online_cpu(cpu) {
@@ -216,7 +216,7 @@ static int cpuacct_stats_show(struct cgroup *cgrp, struct cftype *cft,
 	}
 
 	val = cputime64_to_clock_t(val);
-	cb->fill(cb, cpuacct_stat_desc[CPUACCT_STAT_SYSTEM], val);
+	seq_printf(sf, "%s %lld\n", cpuacct_stat_desc[CPUACCT_STAT_SYSTEM], val);
 
 	return 0;
 }
@@ -233,7 +233,7 @@ static struct cftype files[] = {
 	},
 	{
 		.name = "stat",
-		.read_map = cpuacct_stats_show,
+		.read_seq_string = cpuacct_stats_show,
 	},
 	{ }	/* terminate */
 };
@@ -286,11 +286,9 @@ void cpuacct_account_field(struct task_struct *p, int index, u64 val)
 	rcu_read_unlock();
 }
 
-struct cgroup_subsys cpuacct_subsys = {
-	.name		= "cpuacct",
+struct cgroup_subsys cpuacct_cgrp_subsys = {
 	.css_alloc	= cpuacct_css_alloc,
 	.css_free	= cpuacct_css_free,
-	.subsys_id	= cpuacct_subsys_id,
 	.base_cftypes	= files,
 	.early_init	= 1,
 };

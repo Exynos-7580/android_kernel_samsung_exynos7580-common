@@ -295,7 +295,7 @@ int f2fs_init_acl(struct inode *inode, struct inode *dir, struct page *ipage,
 		if (error)
 			goto cleanup;
 	}
-	error = posix_acl_create(&acl, GFP_KERNEL, &inode->i_mode);
+	error = __posix_acl_create(&acl, GFP_KERNEL, &inode->i_mode);
 	if (error < 0)
 		return error;
 	if (error > 0)
@@ -323,7 +323,7 @@ int f2fs_acl_chmod(struct inode *inode)
 	if (IS_ERR(acl) || !acl)
 		return PTR_ERR(acl);
 
-	error = posix_acl_chmod(&acl, GFP_KERNEL, mode);
+	error = __posix_acl_chmod(&acl, GFP_KERNEL, mode);
 	if (error)
 		return error;
 

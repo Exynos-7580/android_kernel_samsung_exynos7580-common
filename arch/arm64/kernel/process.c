@@ -332,7 +332,8 @@ void release_thread(struct task_struct *dead_task)
 
 int arch_dup_task_struct(struct task_struct *dst, struct task_struct *src)
 {
-	fpsimd_save_state(&current->thread.fpsimd_state);
+	if (current->mm)
+		fpsimd_preserve_current_state();
 	*dst = *src;
 	return 0;
 }
@@ -465,23 +466,9 @@ unsigned long arch_align_stack(unsigned long sp)
 
 unsigned long arch_randomize_brk(struct mm_struct *mm)
 {
-	unsigned long base = mm->brk;
-	unsigned long range_end = base + (STACK_RND_MASK << PAGE_SHIFT) + 1;
-	unsigned long max_stack, range_limit;
+	if (is_compat_task())
+		return randomize_page(mm->brk, SZ_32M);
+	else
+		return randomize_page(mm->brk, SZ_1G);
 
-	/*
-	 * Determine how much room we need to leave available for the stack.
-	 * We limit this to a reasonable value, because extremely large or
-	 * unlimited stacks are always going to bump up against brk at some
-	 * point and we don't want to fail to randomise brk in those cases.
-	 */
-	max_stack = rlimit(RLIMIT_STACK);
-	if (max_stack > SZ_128M)
-		max_stack = SZ_128M;
-
-	range_limit = mm->start_stack - max_stack - 1;
-	if (range_end > range_limit)
-		range_end = range_limit;
-
-	return randomize_range(base, range_end, 0) ? : base;
 }
