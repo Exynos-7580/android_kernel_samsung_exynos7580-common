@@ -461,8 +461,8 @@ static ssize_t set_gpu_throttling1(struct device *dev, struct device_attribute *
 	}
 
 	if ((throttling1 < platform->gpu_min_clock) || (throttling1 > platform->gpu_max_clock)) {
-		    GPU_LOG(DVFS_WARNING, DUMMY, 0u, 0u, "%s: out of range (%d)\n", __func__, throttling1);
-		    return -ENOENT;
+		GPU_LOG(DVFS_WARNING, DUMMY, 0u, 0u, "%s: out of range (%d)\n", __func__, throttling1);
+		return -ENOENT;
 	}
 
 	platform->tmu_lock_clk[THROTTLING1] = throttling1;
@@ -580,7 +580,7 @@ static ssize_t show_gpu_throttling4(struct device *dev, struct device_attribute 
 		ret = PAGE_SIZE-1;
 	}
 
-    return ret;
+	return ret;
 }
 
 static ssize_t set_gpu_throttling4(struct device *dev, struct device_attribute *attr, const char *buf, size_t count)
@@ -626,7 +626,7 @@ static ssize_t show_gpu_throttling5(struct device *dev, struct device_attribute 
 		ret = PAGE_SIZE-1;
 	}
 
-    return ret;
+	return ret;
 }
 
 static ssize_t set_gpu_throttling5(struct device *dev, struct device_attribute *attr, const char *buf, size_t count)
@@ -672,7 +672,7 @@ static ssize_t show_gpu_throttling6(struct device *dev, struct device_attribute 
 		ret = PAGE_SIZE-1;
 	}
 
-    return ret;
+	return ret;
 }
 
 static ssize_t set_gpu_throttling6(struct device *dev, struct device_attribute *attr, const char *buf, size_t count)
@@ -718,7 +718,7 @@ static ssize_t show_gpu_throttling7(struct device *dev, struct device_attribute 
 		ret = PAGE_SIZE-1;
 	}
 
-    return ret;
+	return ret;
 }
 
 static ssize_t set_gpu_throttling7(struct device *dev, struct device_attribute *attr, const char *buf, size_t count)
@@ -764,7 +764,7 @@ static ssize_t show_gpu_throttling8(struct device *dev, struct device_attribute 
 		ret = PAGE_SIZE-1;
 	}
 
-    return ret;
+	return ret;
 }
 
 static ssize_t set_gpu_throttling8(struct device *dev, struct device_attribute *attr, const char *buf, size_t count)
@@ -794,8 +794,8 @@ static ssize_t set_gpu_throttling8(struct device *dev, struct device_attribute *
 
 static ssize_t show_gpu_tripping(struct device *dev, struct device_attribute *attr, char *buf)
 {
-	    ssize_t ret = 0;
-	    struct exynos_context *platform = (struct exynos_context *)pkbdev->platform_context;
+	ssize_t ret = 0;
+	struct exynos_context *platform = (struct exynos_context *)pkbdev->platform_context;
 
 	if (!platform)
 		return -ENODEV;
@@ -810,7 +810,7 @@ static ssize_t show_gpu_tripping(struct device *dev, struct device_attribute *at
 		ret = PAGE_SIZE-1;
 	}
 
-    return ret;
+	return ret;
 }
 static ssize_t set_gpu_tripping(struct device *dev, struct device_attribute *attr, const char *buf, size_t count)
 {
@@ -818,7 +818,7 @@ static ssize_t set_gpu_tripping(struct device *dev, struct device_attribute *att
 	struct exynos_context *platform = (struct exynos_context *)pkbdev->platform_context;
 
 	if (!platform)
-	    return -ENODEV;
+		return -ENODEV;
 
 	ret = kstrtoint(buf, 0, &tripping);
 
@@ -1835,10 +1835,10 @@ static int gpu_get_status(struct exynos_context *platform, char *buf, size_t buf
 	int cnt = 0;
 	int i;
 
-	if(!platform)
+	if (!platform)
 		return -ENODEV;
 
-	if(buf == NULL)
+	if (buf == NULL)
 		return 0;
 
 	cnt += snprintf(buf+cnt, buf_size-cnt, "reset count : %d\n", platform->reset_count);
@@ -2581,7 +2581,7 @@ int gpu_create_sysfs_file(struct device *dev)
 
 #ifdef CONFIG_MALI_SEC_HWCNT
 	if (device_create_file(dev, &dev_attr_hwcnt_dvfs)) {
-		GPU_LOG(DVFS_ERROR, DUMMY, 0u, 0u,"Couldn't create sysfs file [hwcnt_dvfs]\n");
+		GPU_LOG(DVFS_ERROR, DUMMY, 0u, 0u, "Couldn't create sysfs file [hwcnt_dvfs]\n");
 		goto out;
 	}
 
