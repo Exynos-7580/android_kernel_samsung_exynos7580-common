@@ -48,13 +48,13 @@
 /*  clk, vol, abb, min, max, down, stay, pm_qos mem, pm_qos int, pm_qos cpu_kfc_min, pm_qos cpu_egl_max */
 static gpu_dvfs_info gpu_dvfs_table_default[] = {
 	{800, 1100000, 0,  85, 100, 1, 0, 825000, 400000,  1200000, CPU_MAX},
-	{734, 1000000, 0,  75,  90, 1, 0, 825000, 400000,  1000000, CPU_MAX},
-	{668, 1000000, 0,  60,  85, 1, 0, 825000, 400000,   800000, CPU_MAX},
-	{534,  950000, 0,  55,  85, 1, 0, 728000, 334000,   500000, CPU_MAX},
-	{440,  900000, 0,  50,  85, 1, 0, 667000, 267000,   500000, CPU_MAX},
-	{350,  800000, 0,  45,  85, 1, 0, 559000, 267000,   500000, CPU_MAX},
-	{266,  800000, 0,  40,  85, 1, 0, 416000, 200000,   	 0, CPU_MAX},
-	{160,  800000, 0,  35,  80, 1, 0, 416000, 200000,   	 0, CPU_MAX},
+	{734, 1000000, 0,  75,  90, 1, 0, 741000, 400000,  1000000, CPU_MAX},
+	{668, 1000000, 0,  60,  85, 1, 0, 728000, 400000,   800000, CPU_MAX},
+	{534,  950000, 0,  55,  85, 1, 0, 667000, 334000,   500000, CPU_MAX},
+	{440,  900000, 0,  50,  85, 1, 0, 559000, 267000,   500000, CPU_MAX},
+	{350,  800000, 0,  45,  85, 1, 0, 416000, 267000,   500000, CPU_MAX},
+	{266,  800000, 0,  40,  85, 1, 0, 338000, 200000,   	 0, CPU_MAX},
+	{160,  800000, 0,  35,  80, 1, 0, 273000, 200000,   	 0, CPU_MAX},
 };
 
 static int mif_min_table[] = {
@@ -88,7 +88,7 @@ static gpu_attribute gpu_config_attributes[] = {
 	{GPU_GOVERNOR_TABLE_SIZE_BOOSTER,
 		GPU_DVFS_TABLE_LIST_SIZE(gpu_dvfs_table_default)},
 	{GPU_GOVERNOR_INTERACTIVE_HIGHSPEED_CLOCK, 668},
-	{GPU_GOVERNOR_INTERACTIVE_HIGHSPEED_LOAD, 95},
+	{GPU_GOVERNOR_INTERACTIVE_HIGHSPEED_LOAD, 90},
 	{GPU_GOVERNOR_INTERACTIVE_HIGHSPEED_DELAY, 0},
 	{GPU_DEFAULT_VOLTAGE, 700000},
 	{GPU_COLD_MINIMUM_VOL, 0},
@@ -103,8 +103,8 @@ static gpu_attribute gpu_config_attributes[] = {
 	{GPU_TEMP_THROTTLING7, 266},
 	{GPU_TEMP_THROTTLING8, 160},
 	{GPU_TEMP_TRIPPING, 266},
-	{GPU_POWER_COEFF, 46}, /* all core on param */
-	{GPU_DVFS_TIME_INTERVAL, 5},
+	{GPU_POWER_COEFF, 90}, /* all core on param */
+	{GPU_DVFS_TIME_INTERVAL, 2},
 	{GPU_DEFAULT_WAKEUP_LOCK, 1},
 	{GPU_BUS_DEVFREQ, 1},
 	{GPU_DYNAMIC_ABB, 0},
@@ -126,7 +126,7 @@ static gpu_attribute gpu_config_attributes[] = {
 	{GPU_HWCNT_CHOOSE_MMU_L2 , 0},
 #endif
 	{GPU_RUNTIME_PM_DELAY_TIME, 30},
-	{GPU_DVFS_POLLING_TIME, 15},
+	{GPU_DVFS_POLLING_TIME, 12},
 	{GPU_PMQOS_INT_DISABLE, 0},
 	{GPU_PMQOS_MIF_MAX_CLOCK, 825000},
 	{GPU_PMQOS_MIF_MAX_CLOCK_BASE, 800},
