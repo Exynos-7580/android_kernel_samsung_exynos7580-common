@@ -42,7 +42,7 @@
 #ifdef CONFIG_POWERSUSPEND
 #include <linux/powersuspend.h>
 
-unsigned int gpu_min_override = 160;
+unsigned int gpu_min_override = 100;
 unsigned int gpu_max_override = 800;
 unsigned int gpu_max_override_screen_off = 0;
 #endif
