@@ -87,6 +87,10 @@
 #define CREATE_TRACE_POINTS
 #include <trace/events/task.h>
 
+#if defined (CONFIG_LAZYPLUG)
+extern void cpu_all_ctrl(bool online);
+#endif
+
 /*
  * Protected counters by write_lock_irq(&tasklist_lock)
  */
@@ -1649,6 +1653,11 @@ long do_fork(unsigned long clone_flags,
 	struct task_struct *p;
 	int trace = 0;
 	long nr;
+
+#if defined (CONFIG_LAZYPLUG)
+	if (is_zygote_pid(current->pid))
+		cpu_all_ctrl(true);
+#endif
 
 	/*
 	 * Do some preliminary argument and permissions checking before we
