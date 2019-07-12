@@ -358,6 +358,7 @@ static int __init exynos_init_cpuidle(void)
 {
 	int cpuid, ret;
 	struct cpuidle_device *device;
+	struct cpuidle_driver *drv;
 
 	ret = exynos_idle_state_init(&exynos64_idle_cluster0_driver, cpu_online_mask);
 	if (ret)
@@ -376,8 +377,9 @@ static int __init exynos_init_cpuidle(void)
 	for_each_cpu(cpuid, cpu_online_mask) {
 		device = &per_cpu(exynos_cpuidle_device, cpuid);
 		device->cpu = cpuid;
+		drv = cpuidle_get_cpu_driver(device);
 
-		device->state_count = exynos64_idle_cluster0_driver.state_count;
+		drv->state_count = exynos64_idle_cluster0_driver.state_count;
 
 		/* Big core will not change idle time correlation factor */
 		if (cpuid & 0x4)

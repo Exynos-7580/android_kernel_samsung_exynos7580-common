@@ -380,6 +380,7 @@ static int __init exynos64_init_cpuidle(void)
 {
 	int cpu, ret;
 	struct cpuidle_device *device;
+	struct cpuidle_driver *drv;
 
 	ret = exynos_idle_state_init(&exynos64_idle_driver, cpu_online_mask);
 	if (ret)
@@ -398,8 +399,9 @@ static int __init exynos64_init_cpuidle(void)
 	for_each_cpu(cpu, cpu_online_mask) {
 		device = &per_cpu(exynos64_cpuidle_device, cpu);
 		device->cpu = cpu;
+		drv = cpuidle_get_cpu_driver(device);
 
-		device->state_count = exynos64_idle_driver.state_count;
+		drv->state_count = exynos64_idle_driver.state_count;
 
 		/* Non-boot cluster will skip idle time correlation */
 		if (cpu & 0x4)
