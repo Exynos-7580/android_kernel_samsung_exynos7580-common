@@ -431,14 +431,12 @@ static void __sdfat_truncate_pagecache(struct inode *inode,
 	truncate_pagecache(inode, to, newsize);
 }
 
-static int sdfat_d_hash(const struct dentry *dentry,
-		const struct inode *inode, struct qstr *qstr)
+static int sdfat_d_hash(const struct dentry *dentry, struct qstr *qstr)
 {
 	return __sdfat_d_hash(dentry, qstr);
 }
 
-static int sdfat_d_hashi(const struct dentry *dentry,
-		const struct inode *inode, struct qstr *qstr)
+static int sdfat_d_hashi(const struct dentry *dentry, struct qstr *qstr)
 {
 	return __sdfat_d_hashi(dentry, qstr);
 }
@@ -559,7 +557,6 @@ out_unlocked:
 }
 #endif
 
-
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(3, 9, 0)
 	/* EMPTY */
 #else /* LINUX_VERSION_CODE < KERNEL_VERSION(3, 9, 0) */
@@ -568,7 +565,6 @@ static inline struct inode *file_inode(const struct file *f)
 	return f->f_dentry->d_inode;
 }
 #endif
-
 
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(3, 7, 0)
 static inline int __is_sb_dirty(struct super_block *sb)
@@ -934,15 +930,13 @@ static int sdfat_cmpi(const struct dentry *parent, const struct dentry *dentry,
 	return __sdfat_cmpi(dentry, len, str, name);
 }
 #else
-static int sdfat_cmp(const struct dentry *parent, const struct inode *pinode,
-		const struct dentry *dentry, const struct inode *inode,
+static int sdfat_cmp(const struct dentry *parent, const struct dentry *dentry,
 		unsigned int len, const char *str, const struct qstr *name)
 {
 	return __sdfat_cmp(dentry, len, str, name);
 }
 
-static int sdfat_cmpi(const struct dentry *parent, const struct inode *pinode,
-		const struct dentry *dentry, const struct inode *inode,
+static int sdfat_cmpi(const struct dentry *parent, const struct dentry *dentry,
 		unsigned int len, const char *str, const struct qstr *name)
 {
 	return __sdfat_cmpi(dentry, len, str, name);
