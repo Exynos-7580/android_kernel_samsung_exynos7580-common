@@ -51,8 +51,7 @@ static int seq_show(struct seq_file *m, void *v)
                 seq_printf(m, "pos:\t%lli\nflags:\t0%o\n",
 			   (long long)file->f_pos, f_flags);
 		if (file->f_op->show_fdinfo)
-			file->f_op->show_fdinfo(m, file);
-		ret = seq_has_overflowed(m);
+			ret = file->f_op->show_fdinfo(m, file);
 		fput(file);
 	}
 
