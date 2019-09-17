@@ -1203,7 +1203,7 @@ static int dw_mci_exynos_execute_tuning(struct dw_mci *host, u32 opcode)
 	if (host->pdata->tuned) {
 		host->drv_data->misc_control(host, CTRL_RESTORE_CLKSEL, NULL);
 		mci_writel(host, CDTHRCTL, host->cd_rd_thr << 16 | 1);
-		dev_info(host->dev, "EN_SHIFT 0x %08x CLKSEL 0x %08x\n",
+		dev_dbg(host->dev, "EN_SHIFT 0x %08x CLKSEL 0x %08x\n",
 			mci_readl(host, DDR200_ENABLE_SHIFT),
 			mci_readl(host, CLKSEL));
 		return 0;
@@ -1293,7 +1293,7 @@ static int dw_mci_exynos_execute_tuning(struct dw_mci *host, u32 opcode)
 			test_sample = dw_mci_tuning_sampling(host);
 
 		dw_mci_set_timeout(host, dw_mci_calc_timeout(host));
-		dev_info(host->dev, "EN_SHIFT 0x %08x CLKSEL 0x %08x\n",
+		dev_dbg(host->dev, "EN_SHIFT 0x %08x CLKSEL 0x %08x\n",
 			mci_readl(host, DDR200_ENABLE_SHIFT),
 			mci_readl(host, CLKSEL));
 		mmc_wait_for_req(mmc, &mrq);
