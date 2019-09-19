@@ -760,10 +760,11 @@ __mod_timer(struct timer_list *timer, unsigned long expires,
 
 	debug_activate(timer, expires);
 
+	cpu = smp_processor_id();
+
 #ifdef CONFIG_SMP
 	if (base != tvec_base_deferral) {
 #endif
-		 cpu = smp_processor_id();
 
 #if defined(CONFIG_NO_HZ_COMMON) && defined(CONFIG_SMP)
 		if (!pinned && get_sysctl_timer_migration() && idle_cpu(cpu))
@@ -1685,7 +1686,12 @@ static int init_timers_cpu(int cpu)
 		tvec_base_done[cpu] = 1;
 		base->cpu = cpu;
 	} else {
-		base = per_cpu(tvec_bases, cpu);
+		if (cpu != NR_CPUS)
+			base = per_cpu(tvec_bases, cpu);
+#ifdef CONFIG_SMP
+		else
+			base = tvec_base_deferral;
+#endif
 	}
 
 
