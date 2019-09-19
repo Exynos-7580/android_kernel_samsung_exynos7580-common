@@ -1611,7 +1611,6 @@ static void init_hrtimers_cpu(int cpu)
 		timerqueue_init_head(&cpu_base->clock_base[i].active);
 	}
 
-	cpu_base->cpu = cpu;
 	cpu_base->active_bases = 0;
 	hrtimer_init_hres(cpu_base);
 }
