@@ -33,14 +33,12 @@
 #include <linux/irq.h>
 #include <linux/delay.h>
 #include <linux/clocksource.h>
+#include <linux/clk-provider.h>
 
 #include <clocksource/arm_arch_timer.h>
-#include <clocksource/exynos_mct.h>
 
 #include <asm/thread_info.h>
 #include <asm/stacktrace.h>
-#include <asm/mach/arch.h>
-#include <linux/clk-provider.h>
 
 #ifdef CONFIG_SMP
 unsigned long profile_pc(struct pt_regs *regs)
@@ -62,15 +60,6 @@ unsigned long profile_pc(struct pt_regs *regs)
 	return frame.pc;
 }
 EXPORT_SYMBOL(profile_pc);
-#endif
-
-#ifndef CONFIG_CLKSRC_EXYNOS_MCT
-static u64 sched_clock_mult __read_mostly;
-
-unsigned long long notrace sched_clock(void)
-{
-	return arch_timer_read_counter() * sched_clock_mult;
-}
 #endif
 
 void __init time_init(void)
