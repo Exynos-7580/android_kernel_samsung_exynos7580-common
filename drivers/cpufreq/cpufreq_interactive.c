@@ -641,8 +641,8 @@ static int cpufreq_interactive_speedchange_task(void *data)
 			 * change the max_freq only if higher than last one
 			 */
 			if (freq_lock_streaming() && in_stream_freq < max_freq) {
-				/* Use for disabling CPU frequency lock:
-				 * echo 0 > /sys/devices/system/cpu0/cpufreq/interactive/in_stream_freq
+				/* Use for disabling max CPU frequency lock:
+				 * echo 0 > /sys/devices/system/cpu0/cpufreq/interactive/stream_freq
 				 */
 				if (in_stream_freq > 0)
 					max_freq = in_stream_freq;

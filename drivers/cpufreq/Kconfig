@@ -28,14 +28,14 @@ config CPU_FREQ_INSTREAM
 	depends on CPU_FREQ_GOV_INTERACTIVE
 	default n
 	help
-	  This config sets the default streaming frequency for the instance
-	  time when the cpu is streaming. The goal of this implementation is
-	  to provide an easy tunable option altering which from the defconfig
-	  itself the user can change the boundry range if this config isn't
-	  touched the default would be set to 0.5GHz (500MHz).
+	  This config limits the default max CPU frequency for the instance time
+	  when the device is in a stream session. The goal of this implementation
+	  is to provide an easy tunable option altering which from the defconfig
+	  itself. The user can change the boundry range. Set to 0 for disabling
+	  limit max streaming freq. The default is 0.5GHz (500MHz).
 
 config DEFAULT_MAX_CPU_FREQ_INSTREAM
-	int "set the default boundry frequency limit while device is in video session"
+	int "set the default max CPU frequency limit while device is in video session"
 	depends on CPU_FREQ_INSTREAM
 	default 500000
 
