@@ -136,6 +136,17 @@ struct cpufreq_interactive_tunables {
 	unsigned int *policy;
 };
 
+#if defined(CONFIG_CPU_FREQ_INSTREAM)
+/* dev-harsh1998: limit max bg freq to 500mhz if we're playing videos */
+#define DEFAULT_MAX_STREAM_FREQ CONFIG_DEFAULT_MAX_CPU_FREQ_INSTREAM
+static unsigned long in_stream_freq = DEFAULT_MAX_STREAM_FREQ;
+
+static bool freq_lock_streaming(void)
+{
+	return stream_status();
+}
+#endif
+
 /* For cases where we have single governor instance for system */
 static struct cpufreq_interactive_tunables *common_tunables;
 static struct cpufreq_interactive_tunables *tuned_parameters[NR_CPUS] = {NULL, };
@@ -622,7 +633,20 @@ static int cpufreq_interactive_speedchange_task(void *data)
 
 #if defined(CONFIG_POWERSUSPEND)
 			if (power_suspended && max_freq > screen_off_max)
-				    max_freq = screen_off_max;
+				max_freq = screen_off_max;
+#endif
+
+#if defined(CONFIG_CPU_FREQ_INSTREAM)
+			/* dev-harsh1998: check status and change max_freq
+			 * change the max_freq only if higher than last one
+			 */
+			if (freq_lock_streaming() && in_stream_freq < max_freq) {
+				/* Use for disabling CPU frequency lock:
+				 * echo 0 > /sys/devices/system/cpu0/cpufreq/interactive/in_stream_freq
+				 */
+				if (in_stream_freq > 0)
+					max_freq = in_stream_freq;
+			}
 #endif
 
 			if (max_freq != pcpu->policy->cur) {
@@ -1017,6 +1041,29 @@ static ssize_t store_timer_slack(struct cpufreq_interactive_tunables *tunables,
 	return count;
 }
 
+#if defined(CONFIG_CPU_FREQ_INSTREAM)
+static ssize_t show_stream_freq(struct cpufreq_interactive_tunables *tunables,
+			       char *buf)
+{
+	return sprintf(buf, "%lu\n", in_stream_freq);
+}
+
+static ssize_t store_stream_freq(struct cpufreq_interactive_tunables *tunables,
+				 const char *buf, size_t count)
+{
+	int ret;
+	unsigned long val;
+
+	ret = strict_strtoul(buf, 0, &val);
+
+	if (ret < 0)
+		return ret;
+
+	in_stream_freq = val < 0 ? DEFAULT_MAX_STREAM_FREQ : val;
+	return count;
+}
+#endif
+
 static ssize_t show_boost(struct cpufreq_interactive_tunables *tunables,
 			  char *buf)
 {
@@ -1158,6 +1205,9 @@ show_store_gov_pol_sys(go_hispeed_load);
 show_store_gov_pol_sys(min_sample_time);
 show_store_gov_pol_sys(timer_rate);
 show_store_gov_pol_sys(timer_slack);
+#if defined(CONFIG_CPU_FREQ_INSTREAM)
+show_store_gov_pol_sys(stream_freq);
+#endif
 show_store_gov_pol_sys(boost);
 store_gov_pol_sys(boostpulse);
 show_store_gov_pol_sys(boostpulse_duration);
@@ -1182,6 +1232,9 @@ gov_sys_pol_attr_rw(go_hispeed_load);
 gov_sys_pol_attr_rw(min_sample_time);
 gov_sys_pol_attr_rw(timer_rate);
 gov_sys_pol_attr_rw(timer_slack);
+#if defined(CONFIG_CPU_FREQ_INSTREAM)
+gov_sys_pol_attr_rw(stream_freq);
+#endif
 gov_sys_pol_attr_rw(boost);
 gov_sys_pol_attr_rw(boostpulse_duration);
 gov_sys_pol_attr_rw(io_is_busy);
@@ -1201,6 +1254,9 @@ static struct attribute *interactive_attributes_gov_sys[] = {
 	&min_sample_time_gov_sys.attr,
 	&timer_rate_gov_sys.attr,
 	&timer_slack_gov_sys.attr,
+#if defined(CONFIG_CPU_FREQ_INSTREAM)
+	&stream_freq_gov_sys.attr,
+#endif
 	&boost_gov_sys.attr,
 	&boostpulse_gov_sys.attr,
 	&boostpulse_duration_gov_sys.attr,
@@ -1222,6 +1278,9 @@ static struct attribute *interactive_attributes_gov_pol[] = {
 	&min_sample_time_gov_pol.attr,
 	&timer_rate_gov_pol.attr,
 	&timer_slack_gov_pol.attr,
+#if defined(CONFIG_CPU_FREQ_INSTREAM)
+	&stream_freq_gov_pol.attr,
+#endif
 	&boost_gov_pol.attr,
 	&boostpulse_gov_pol.attr,
 	&boostpulse_duration_gov_pol.attr,

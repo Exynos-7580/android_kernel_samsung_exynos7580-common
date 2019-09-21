@@ -46,6 +46,11 @@
 extern void lazyplug_enter_lazy(bool enter);
 #endif
 
+#if defined (CONFIG_CPU_FREQ_INSTREAM)
+#include <linux/cpufreq.h>
+#endif
+
+
 #include "s5p_mfc_common.h"
 #include "s5p_mfc_intr.h"
 #include "s5p_mfc_inst.h"
@@ -74,6 +79,15 @@ module_param(no_order, int, S_IRUGO | S_IWUSR);
 
 struct _mfc_trace g_mfc_trace[MFC_DEV_NUM_MAX][MFC_TRACE_COUNT_MAX];
 struct s5p_mfc_dev *g_mfc_dev[MFC_DEV_NUM_MAX];
+
+#ifdef CONFIG_CPU_FREQ_INSTREAM
+/* dev-harsh1998: export streaming status */
+static bool in_stream;
+
+bool stream_status(void) {
+	return in_stream;
+}
+#endif
 
 #ifdef CONFIG_EXYNOS_CONTENT_PATH_PROTECTION
 static struct proc_dir_entry *mfc_proc_entry;
@@ -2283,6 +2297,10 @@ static int s5p_mfc_open(struct file *file)
 	lazyplug_enter_lazy(true);
 #endif
 
+#ifdef CONFIG_CPU_FREQ_INSTREAM
+	in_stream = true;
+#endif
+
 	mfc_info_ctx("MFC open completed [%d:%d] dev = %p, ctx = %p, version = %d\n",
 			dev->num_drm_inst, dev->num_inst, dev, ctx, MFC_DRIVER_INFO);
 	mutex_unlock(&dev->mfc_mutex);
@@ -2377,6 +2395,10 @@ static int s5p_mfc_release(struct file *file)
 
 #ifdef CONFIG_LAZYPLUG
 	lazyplug_enter_lazy(false);
+#endif
+
+#ifdef CONFIG_CPU_FREQ_INSTREAM
+	in_stream = false;
 #endif
 
 	if (need_to_wait_frame_start(ctx)) {
