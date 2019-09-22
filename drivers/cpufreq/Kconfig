@@ -25,7 +25,7 @@ config CPU_FREQ_GOV_COMMON
 
 config CPU_FREQ_SCREEN_OFF
 	bool "CPU Frequency while sreen is off"
-	depends on CPU_FREQ_GOV_INTERACTIVE || POWERSUSPEND
+	depends on CPU_FREQ_GOV_INTERACTIVE && POWERSUSPEND
 	default n
 	help
 	  This config limits the max CPU frequency while sreen is off.
