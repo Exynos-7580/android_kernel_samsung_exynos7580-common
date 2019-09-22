@@ -31,7 +31,7 @@
 #include <linux/kthread.h>
 #include <linux/slab.h>
 #include <linux/pm_qos.h>
-#if defined(CONFIG_POWERSUSPEND)
+#if defined(CONFIG_CPU_FREQ_SCREEN_OFF)
 #include <linux/powersuspend.h>
 #endif
 
@@ -80,7 +80,7 @@ static unsigned int default_above_hispeed_delay[] = {
 	DEFAULT_ABOVE_HISPEED_DELAY };
 
 /* limit max freq while sreen is off */
-#if defined(CONFIG_POWERSUSPEND)
+#if defined(CONFIG_CPU_FREQ_SCREEN_OFF)
 static unsigned long screen_off_freq = CONFIG_LIMIT_MAX_CPU_FREQ_SCREEN_OFF;
 #endif
 
@@ -632,7 +632,7 @@ static int cpufreq_interactive_speedchange_task(void *data)
 					max_freq = pjcpu->target_freq;
 			}
 
-#if defined(CONFIG_POWERSUSPEND)
+#if defined(CONFIG_CPU_FREQ_SCREEN_OFF)
 			if (power_suspended && max_freq > screen_off_freq)
 				max_freq = screen_off_freq;
 #endif
