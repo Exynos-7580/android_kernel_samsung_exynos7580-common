@@ -134,15 +134,13 @@ struct cpufreq_interactive_tunables {
 
 	/* handle for get cpufreq_policy */
 	unsigned int *policy;
-
-	/*dev-harsh1998: limit max CPU freq while we're playing videos. */
-#if defined(CONFIG_CPU_FREQ_INSTREAM)
-#define DEFAULT_MAX_STREAM_FREQ CONFIG_DEFAULT_MAX_CPU_FREQ_INSTREAM
-	unsigned long in_stream_freq;
-#endif
 };
 
 #if defined(CONFIG_CPU_FREQ_INSTREAM)
+/* dev-harsh1998: limit max bg freq to 500mhz if we're playing videos */
+#define DEFAULT_MAX_STREAM_FREQ CONFIG_DEFAULT_MAX_CPU_FREQ_INSTREAM
+static unsigned long in_stream_freq = DEFAULT_MAX_STREAM_FREQ;
+
 static bool freq_lock_streaming(void)
 {
 	return stream_status();
@@ -616,7 +614,6 @@ static int cpufreq_interactive_speedchange_task(void *data)
 			unsigned int j;
 			unsigned int max_freq = 0;
 			struct cpufreq_interactive_cpuinfo *pjcpu;
-			struct cpufreq_interactive_tunables *tunables;
 
 			pcpu = &per_cpu(cpuinfo, cpu);
 
@@ -643,12 +640,12 @@ static int cpufreq_interactive_speedchange_task(void *data)
 			/* dev-harsh1998: check status and change max_freq
 			 * change the max_freq only if higher than last one
 			 */
-			if (freq_lock_streaming() && tunables->in_stream_freq < max_freq) {
-				/* Use for disabling max CPU frequency limit:
+			if (freq_lock_streaming() && in_stream_freq < max_freq) {
+				/* Use for disabling max CPU frequency lock:
 				 * echo 0 > /sys/devices/system/cpu0/cpufreq/interactive/stream_freq
 				 */
-				if (tunables->in_stream_freq > 0)
-					max_freq = tunables->in_stream_freq;
+				if (in_stream_freq > 0)
+					max_freq = in_stream_freq;
 			}
 #endif
 
@@ -1048,7 +1045,7 @@ static ssize_t store_timer_slack(struct cpufreq_interactive_tunables *tunables,
 static ssize_t show_stream_freq(struct cpufreq_interactive_tunables *tunables,
 			       char *buf)
 {
-	return sprintf(buf, "%lu\n", tunables->in_stream_freq);
+	return sprintf(buf, "%lu\n", in_stream_freq);
 }
 
 static ssize_t store_stream_freq(struct cpufreq_interactive_tunables *tunables,
@@ -1058,11 +1055,11 @@ static ssize_t store_stream_freq(struct cpufreq_interactive_tunables *tunables,
 	unsigned long val;
 
 	ret = strict_strtoul(buf, 0, &val);
+
 	if (ret < 0)
 		return ret;
 
-	tunables->in_stream_freq = val;
-
+	in_stream_freq = val < 0 ? DEFAULT_MAX_STREAM_FREQ : val;
 	return count;
 }
 #endif
@@ -1370,7 +1367,6 @@ static int cpufreq_governor_interactive(struct cpufreq_policy *policy,
 			tunables->timer_rate = usecs_to_jiffies(DEFAULT_TIMER_RATE);
 			tunables->boostpulse_duration_val = DEFAULT_MIN_SAMPLE_TIME;
 			tunables->timer_slack_val = usecs_to_jiffies(DEFAULT_TIMER_SLACK);
-			tunables->in_stream_freq = DEFAULT_MAX_STREAM_FREQ;
 		} else {
 			memcpy(tunables, tuned_parameters[policy->cpu], sizeof(*tunables));
 			kfree(tuned_parameters[policy->cpu]);
