@@ -511,8 +511,8 @@ typedef struct _TKEY_INFO {
 #include "ist30xxc_sec.h"
 #endif
 
-#ifdef CONFIG_HAS_EARLYSUSPEND
-#include <linux/earlysuspend.h>
+#ifdef CONFIG_POWERSUSPEND
+#include <linux/powersuspend.h>
 #endif
 
 struct ist30xx_dt_data {
@@ -536,8 +536,8 @@ struct ist30xx_data {
 	struct ist30xx_platform_data *pdata;
 	TSP_INFO tsp_info;
 	TKEY_INFO tkey_info;
-#ifdef CONFIG_HAS_EARLYSUSPEND
-	struct early_suspend early_suspend;
+#ifdef CONFIG_POWERSUSPEND
+	struct power_suspend power_suspend;
 #endif
 	struct ist30xx_status status;
 	struct ist30xx_fw fw;
