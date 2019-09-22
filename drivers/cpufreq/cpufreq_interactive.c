@@ -79,15 +79,14 @@ static unsigned int default_target_loads[] = {DEFAULT_TARGET_LOAD};
 static unsigned int default_above_hispeed_delay[] = {
 	DEFAULT_ABOVE_HISPEED_DELAY };
 
+/* limit max freq while sreen is off */
 #if defined(CONFIG_POWERSUSPEND)
-#define DEFAULT_SCREEN_OFF_MAX 500000
-static unsigned long screen_off_max = DEFAULT_SCREEN_OFF_MAX;
+static unsigned long screen_off_freq = CONFIG_LIMIT_MAX_CPU_FREQ_SCREEN_OFF;
 #endif
 
 #if defined(CONFIG_CPU_FREQ_INSTREAM)
-/* dev-harsh1998: limit max bg freq to 500mhz if we're playing videos */
-#define DEFAULT_MAX_STREAM_FREQ CONFIG_DEFAULT_MAX_CPU_FREQ_INSTREAM
-static unsigned long in_stream_freq = DEFAULT_MAX_STREAM_FREQ;
+/* dev-harsh1998: limit max freq while we're playing videos */
+static unsigned long in_stream_freq = CONFIG_LIMIT_MAX_CPU_FREQ_INSTREAM;
 #endif
 
 static 	bool boosted;
@@ -634,8 +633,8 @@ static int cpufreq_interactive_speedchange_task(void *data)
 			}
 
 #if defined(CONFIG_POWERSUSPEND)
-			if (power_suspended && max_freq > screen_off_max)
-				max_freq = screen_off_max;
+			if (power_suspended && max_freq > screen_off_freq)
+				max_freq = screen_off_freq;
 #endif
 
 #if defined(CONFIG_CPU_FREQ_INSTREAM)

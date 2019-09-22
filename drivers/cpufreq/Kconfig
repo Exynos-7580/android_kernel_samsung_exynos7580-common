@@ -23,6 +23,11 @@ config CPU_FREQ_TABLE
 config CPU_FREQ_GOV_COMMON
 	bool
 
+config LIMIT_MAX_CPU_FREQ_SCREEN_OFF
+	int "set the default max CPU frequency limit while sreen is off"
+	depends on CPU_FREQ_GOV_INTERACTIVE
+	default 500000
+
 config CPU_FREQ_INSTREAM
 	bool "CPU Frequency in stream"
 	depends on CPU_FREQ_GOV_INTERACTIVE
@@ -34,7 +39,7 @@ config CPU_FREQ_INSTREAM
 	  itself. The user can change the boundry range. Set to 0 for disabling
 	  limit max streaming freq. The default is 0.5GHz (500MHz).
 
-config DEFAULT_MAX_CPU_FREQ_INSTREAM
+config LIMIT_MAX_CPU_FREQ_INSTREAM
 	int "set the default max CPU frequency limit while device is in video session"
 	depends on CPU_FREQ_INSTREAM
 	default 500000
