@@ -1049,23 +1049,6 @@ static int ist30xx_resume(struct device *dev)
 	return 0;
 }
 
-#ifdef CONFIG_HAS_EARLYSUSPEND
-static void ist30xx_early_suspend(struct early_suspend *h)
-{
-	struct ist30xx_data *data = container_of(h, struct ist30xx_data,
-			early_suspend);
-
-	ist30xx_suspend(&data->client->dev);
-}
-static void ist30xx_late_resume(struct early_suspend *h)
-{
-	struct ist30xx_data *data = container_of(h, struct ist30xx_data,
-			early_suspend);
-
-	ist30xx_resume(&data->client->dev);
-}
-#endif
-
 static void  ist30xx_ts_close(struct input_dev *dev)
 {
 	struct ist30xx_data *data = input_get_drvdata(dev);
@@ -1689,12 +1672,6 @@ static int ist30xx_probe(struct i2c_client *client,
 	input_set_capability(data->input_dev, EV_KEY, KEY_POWER);
 	device_init_wakeup(&data->client->dev, 1);
 
-#ifdef CONFIG_HAS_EARLYSUSPEND
-	data->early_suspend.level = EARLY_SUSPEND_LEVEL_BLANK_SCREEN + 1;
-	data->early_suspend.suspend = ist30xx_early_suspend;
-	data->early_suspend.resume = ist30xx_late_resume;
-	register_early_suspend(&data->early_suspend);
-#endif
 	ts_data = data;
 
 	ret = ist30xx_init_system(data);
@@ -1878,9 +1855,6 @@ err_irq:
 err_init_drv:
 	data->status.event_mode = false;
 	ist30xx_power_off(data);
-#ifdef CONFIG_HAS_EARLYSUSPEND
-	unregister_early_suspend(&data->early_suspend);
-#endif
 err_pinctrl:
 err_alloc_dt:
 	if (data->dt_data) {
@@ -1897,10 +1871,6 @@ err_alloc_dev:
 static int ist30xx_remove(struct i2c_client *client)
 {
 	struct ist30xx_data *data = i2c_get_clientdata(client);
-
-#ifdef CONFIG_HAS_EARLYSUSPEND
-	unregister_early_suspend(&data->early_suspend);
-#endif
 
 	ist30xx_disable_irq(data);
 	free_irq(client->irq, data);
@@ -1947,12 +1917,10 @@ static struct of_device_id ist30xx_match_table[] = {
 #define ist30xx_match_table NULL
 #endif
 
-#if !defined(CONFIG_HAS_EARLYSUSPEND) && !defined(USE_OPEN_CLOSE)
 static const struct dev_pm_ops ist30xx_pm_ops = {
-	.suspend	= ist30xx_suspend,
-	.resume		= ist30xx_resume,
+	.suspend        = ist30xx_suspend,
+	.resume         = ist30xx_resume,
 };
-#endif
 
 static struct i2c_driver ist30xx_i2c_driver = {
 	.id_table	= ist30xx_idtable,
@@ -1963,9 +1931,7 @@ static struct i2c_driver ist30xx_i2c_driver = {
 		.owner		= THIS_MODULE,
 		.name		= IST30XX_DEV_NAME,
 		.of_match_table = ist30xx_match_table,
-#if !defined(CONFIG_HAS_EARLYSUSPEND) && !defined(USE_OPEN_CLOSE)
 		.pm		= &ist30xx_pm_ops,
-#endif
 	},
 };
 
