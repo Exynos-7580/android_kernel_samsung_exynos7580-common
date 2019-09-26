@@ -3181,7 +3181,7 @@ void mmc_start_host(struct mmc_host *host)
 		mmc_power_off(host);
 	else
 		mmc_power_up(host);
-		mmc_release_host(host);
+	mmc_release_host(host);
 #ifdef CONFIG_MMC_DW_EXYNOS /* do detect change wifi only in DW_EXYNOS */
 	if (!strcmp("mmc1", mmc_hostname(host)))
 #if defined(CONFIG_BCM43455) || defined(CONFIG_BCM43455_MODULE) || \
@@ -3189,7 +3189,7 @@ void mmc_start_host(struct mmc_host *host)
     defined(CONFIG_BCM43454) || defined(CONFIG_BCM43454_MODULE)
 		printk("%s skip mmc_detect_change\n", mmc_hostname(host));
 #else
-		mmc_detect_change(host, 0);
+	mmc_detect_change(host, 0);
 #endif
 #else
 #if defined(CONFIG_BCM43455) || defined(CONFIG_BCM43455_MODULE) || \
@@ -3198,8 +3198,8 @@ void mmc_start_host(struct mmc_host *host)
 
 	if (strcmp("mmc1", mmc_hostname(host)))
 #endif
-	mmc_detect_change(host, 0);
 #endif
+	mmc_detect_change(host, 0);
 }
 
 void mmc_stop_host(struct mmc_host *host)
