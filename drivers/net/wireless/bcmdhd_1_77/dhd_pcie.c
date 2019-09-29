@@ -3210,8 +3210,8 @@ dhd_bus_mem_dump(dhd_pub_t *dhdp)
 #endif /* DHD_PCIE_RUNTIMEPM */
 
 	if (DHD_BUS_CHECK_SUSPEND_OR_SUSPEND_IN_PROGRESS(dhdp)) {
-		DHD_ERROR(("%s: bus is in suspend(%d) or suspending(0x%x) state, so skip\n",
-			__func__, dhdp->busstate, dhdp->dhd_bus_busy_state));
+//		DHD_ERROR(("%s: bus is in suspend(%d) or suspending(0x%x) state, so skip\n",
+//			__func__, dhdp->busstate, dhdp->dhd_bus_busy_state));
 		return BCME_ERROR;
 	}
 

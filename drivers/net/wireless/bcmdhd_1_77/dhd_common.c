@@ -840,8 +840,8 @@ dhd_wl_ioctl(dhd_pub_t *dhd_pub, int ifidx, wl_ioctl_t *ioc, void *buf, int len)
 
 		DHD_LINUX_GENERAL_LOCK(dhd_pub, flags);
 		if (DHD_BUS_CHECK_SUSPEND_OR_SUSPEND_IN_PROGRESS(dhd_pub)) {
-			DHD_ERROR(("%s: bus is in suspend(%d) or suspending(0x%x) state!!\n",
-				__func__, dhd_pub->busstate, dhd_pub->dhd_bus_busy_state));
+//			DHD_ERROR(("%s: bus is in suspend(%d) or suspending(0x%x) state!!\n",
+//				__func__, dhd_pub->busstate, dhd_pub->dhd_bus_busy_state));
 			DHD_BUS_BUSY_CLEAR_IN_IOVAR(dhd_pub);
 			dhd_os_busbusy_wake(dhd_pub);
 			DHD_LINUX_GENERAL_UNLOCK(dhd_pub, flags);
@@ -2101,10 +2101,10 @@ dhd_ioctl(dhd_pub_t * dhd_pub, dhd_ioctl_t *ioc, void *buf, uint buflen)
 					    bcmstricmp((char *)buf, "devreset") &&
 					    bcmstricmp((char *)buf, "sdio_suspend")) {
 #endif /* DHD_EFI */
-						DHD_ERROR(("%s: bus is in suspend(%d)"
-							"or suspending(0x%x) state\n",
-							__func__, dhd_pub->busstate,
-							dhd_pub->dhd_bus_busy_state));
+//						DHD_ERROR(("%s: bus is in suspend(%d)"
+//							"or suspending(0x%x) state\n",
+//							__func__, dhd_pub->busstate,
+//							dhd_pub->dhd_bus_busy_state));
 						DHD_BUS_BUSY_CLEAR_IN_DHD_IOVAR(dhd_pub);
 						dhd_os_busbusy_wake(dhd_pub);
 						DHD_LINUX_GENERAL_UNLOCK(dhd_pub, flags);

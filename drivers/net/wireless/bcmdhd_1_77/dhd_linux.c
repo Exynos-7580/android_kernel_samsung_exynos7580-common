@@ -4836,8 +4836,8 @@ dhd_sendpkt(dhd_pub_t *dhdp, int ifidx, void *pktbuf)
 
 	DHD_GENERAL_LOCK(dhdp, flags);
 	if (DHD_BUS_CHECK_SUSPEND_OR_SUSPEND_IN_PROGRESS(dhdp)) {
-		DHD_ERROR(("%s: bus is in suspend(%d) or suspending(0x%x) state!!\n",
-			__func__, dhdp->busstate, dhdp->dhd_bus_busy_state));
+//		DHD_ERROR(("%s: bus is in suspend(%d) or suspending(0x%x) state!!\n",
+//			__func__, dhdp->busstate, dhdp->dhd_bus_busy_state));
 		DHD_BUS_BUSY_CLEAR_IN_SEND_PKT(dhdp);
 		dhd_os_busbusy_wake(dhdp);
 		DHD_GENERAL_UNLOCK(dhdp, flags);
@@ -4931,8 +4931,8 @@ dhd_start_xmit(struct sk_buff *skb, struct net_device *net)
 
 	DHD_GENERAL_LOCK(&dhd->pub, flags);
 	if (DHD_BUS_CHECK_SUSPEND_OR_SUSPEND_IN_PROGRESS(&dhd->pub)) {
-		DHD_ERROR(("%s: bus is in suspend(%d) or suspending(0x%x) state!!\n",
-			__func__, dhd->pub.busstate, dhd->pub.dhd_bus_busy_state));
+//		DHD_ERROR(("%s: bus is in suspend(%d) or suspending(0x%x) state!!\n",
+//			__func__, dhd->pub.busstate, dhd->pub.dhd_bus_busy_state));
 		DHD_BUS_BUSY_CLEAR_IN_TX(&dhd->pub);
 #ifdef PCIE_FULL_DONGLE
 		/* Stop tx queues if suspend is in progress */
@@ -17587,8 +17587,8 @@ dhd_os_socram_dump(struct net_device *dev, uint32 *dump_size)
 	}
 
 	if (DHD_BUS_CHECK_SUSPEND_OR_SUSPEND_IN_PROGRESS(dhdp)) {
-		DHD_ERROR(("%s: bus is in suspend(%d) or suspending(0x%x) state, so skip\n",
-			__func__, dhdp->busstate, dhdp->dhd_bus_busy_state));
+//		DHD_ERROR(("%s: bus is in suspend(%d) or suspending(0x%x) state, so skip\n",
+//			__func__, dhdp->busstate, dhdp->dhd_bus_busy_state));
 		return BCME_ERROR;
 	}
 
