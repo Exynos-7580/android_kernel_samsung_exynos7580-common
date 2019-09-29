@@ -3187,13 +3187,15 @@ void mmc_start_host(struct mmc_host *host)
 #if defined(CONFIG_BCM43455) || defined(CONFIG_BCM43455_MODULE) || \
     defined(CONFIG_BCM4343) || defined(CONFIG_BCM4343_MODULE) || \
     defined(CONFIG_BCM43454) || defined(CONFIG_BCM43454_MODULE)
+		{
 		printk("%s skip mmc_detect_change\n", mmc_hostname(host));
+		return;
+	}
 #endif
 #else
 #if defined(CONFIG_BCM43455) || defined(CONFIG_BCM43455_MODULE) || \
     defined(CONFIG_BCM4343) || defined(CONFIG_BCM4343_MODULE) || \
     defined(CONFIG_BCM43454) || defined(CONFIG_BCM43454_MODULE)
-
 	if (strcmp("mmc1", mmc_hostname(host)))
 #endif
 #endif
