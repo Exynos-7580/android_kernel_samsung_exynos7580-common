@@ -36,6 +36,9 @@
 #include <linux/hid.h>
 #include <linux/hiddev.h>
 #include <linux/usb.h>
+#ifdef CONFIG_USB_NOTIFY_PROC_LOG
+#include <linux/usblog_proc_notify.h>
+#endif
 #include <linux/usb/ch9.h>
 #include <linux/usb/f_accessory.h>
 
@@ -1016,6 +1019,9 @@ static void acc_start_work(struct work_struct *data)
 	char *envp[2] = { "ACCESSORY=START", NULL };
 
 	kobject_uevent_env(&acc_device.this_device->kobj, KOBJ_CHANGE, envp);
+#ifdef CONFIG_USB_NOTIFY_PROC_LOG
+	store_usblog_notify(NOTIFY_USBSTATE, (void *)envp[0], NULL);
+#endif
 }
 
 static int acc_hid_init(struct acc_hid_dev *hdev)

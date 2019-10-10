@@ -47,7 +47,7 @@
 #define SEC_NFC_SET_MODE		_IOW(SEC_NFC_MAGIC, 1, unsigned int)
 #define SEC_NFC_SLEEP			_IOW(SEC_NFC_MAGIC, 2, unsigned int)
 #define SEC_NFC_WAKEUP			_IOW(SEC_NFC_MAGIC, 3, unsigned int)
-#define SEC_NFC_SET_NPT_MODE	_IOW(SEC_NFC_MAGIC, 4, unsigned int)
+#define SEC_NFC_SET_NPT_MODE		_IOW(SEC_NFC_MAGIC, 4, unsigned int)
 
 /* SFR bit mask */
 #define SEC_NFC_CLKCTRL_PD              0x01
