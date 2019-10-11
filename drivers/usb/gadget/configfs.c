@@ -87,9 +87,9 @@ struct gadget_config_name {
 	struct list_head list;
 };
 
-
 #define MAX_USB_STRING_LEN     126
 #define MAX_USB_STRING_WITH_NULL_LEN   (MAX_USB_STRING_LEN+1)
+
 static int usb_string_copy(const char *s, char **s_copy)
 {
 	int ret;
@@ -112,7 +112,7 @@ static int usb_string_copy(const char *s, char **s_copy)
 		str[ret - 1] = '\0';
 	*s_copy = str;
 	return 0;
- }
+}
 
 CONFIGFS_ATTR_STRUCT(gadget_info);
 CONFIGFS_ATTR_STRUCT(config_usb_cfg);
