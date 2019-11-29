@@ -134,7 +134,7 @@ static void cp_active_handler(void *arg)
 static int get_system_rev(struct device_node *np)
 {
 	int value, cnt, gpio_cnt;
-	unsigned gpio_hw_rev, hw_rev = 0;
+	unsigned gpio_hw_rev;
 
 	gpio_cnt = of_gpio_count(np);
 	if (gpio_cnt < 0) {
@@ -150,10 +150,9 @@ static int get_system_rev(struct device_node *np)
 		}
 
 		value = gpio_get_value(gpio_hw_rev);
-		hw_rev |= (value & 0x1) << cnt;
 	}
 
-	return hw_rev;
+	return value;
 }
 
 static int get_ds_detect(struct device_node *np)
@@ -169,6 +168,15 @@ static int get_ds_detect(struct device_node *np)
 	return gpio_get_value(gpio_ds_det);
 }
 
+static int sys_rev = 0;
+
+static int __init mif_get_hw_rev(char *arg)
+{
+	get_option(&arg, &sys_rev);
+	return 0;
+}
+early_param("androidboot.hw_rev", mif_get_hw_rev);
+
 static int init_mailbox_regs(struct modem_ctl *mc)
 {
 	struct platform_device *pdev = to_platform_device(mc->dev);
@@ -182,7 +190,9 @@ static int init_mailbox_regs(struct modem_ctl *mc)
 	if (np) {
 		mif_dt_read_u32(np, "mbx_ap2cp_info_value", info_val);
 
-		sys_rev = get_system_rev(np);
+		if (get_system_rev(np) < 0)
+			return -EINVAL;
+
 		ds_det = get_ds_detect(np);
 		if (sys_rev < 0 || ds_det < 0)
 			return -EINVAL;
