@@ -19,6 +19,13 @@ config BCM4343
 	  This module adds support for wireless adapters based on
 	  Broadcom 4343 chipset.
 
+config BCM43436
+	tristate "Broadcom 43436 wireless cards support"
+	depends on BROADCOM_WIFI
+	---help---
+	  This module adds support for wireless adapters based on
+	  Broadcom 43436 chipset.
+
 config BCM4334
 	tristate "Broadcom 4334 wireless cards support"
 	depends on BROADCOM_WIFI
@@ -83,11 +90,11 @@ config BCM43241
 	  Broadcom 43241 chipset.
 
 config BCM43456
-        tristate "Broadcom 43456 wireless cards support"
-        depends on BROADCOM_WIFI
-        ---help---
-          This module adds support for wireless adapters based on
-          Broadcom 43456 chipset.
+	tristate "Broadcom 43456 wireless cards support"
+	depends on BROADCOM_WIFI
+	---help---
+	  This module adds support for wireless adapters based on
+	  Broadcom 43456 chipset.
 
 config BCM43455
 	tristate "Broadcom 43455 wireless cards support"
@@ -148,7 +155,7 @@ config WLAN_REGION_CODE
 	depends on BROADCOM_WIFI
 	default 100
 	---help---
-		This is a region code for Broadcom Wi-Fi featured functions.
+	  This is a region code for Broadcom Wi-Fi featured functions.
 		- 100 : EUR OPEN
 		- 101 : EUR ORG
 		- 200 : KOR OPEN
@@ -220,37 +227,37 @@ config SPLIT_ARGOS_SET
 	bool "Support argos table"
 	depends on BROADCOM_WIFI
 	---help---
-	To support SPLIT_ARGOS_SET
+	  To support SPLIT_ARGOS_SET
 
 config WLAN_GRACE
-       bool "Model code for GRACE"
-       depends on BROADCOM_WIFI
-       ---help---
-       This is configuration for Grace feature
+	bool "Model code for GRACE"
+	depends on BROADCOM_WIFI
+	---help---
+	  This is configuration for Grace feature
 
 config WLAN_GREAT
 	bool "model code for GREAT"
 	depends on BROADCOM_WIFI
 	---help---
-	This is configuration for Great feature
+	  This is configuration for Great feature
 
 config BCM_DETECT_CONSECUTIVE_HANG
 	bool "Detect consecutive hang event"
 	depends on BROADCOM_WIFI
 	default n
 	---help---
-	Detecting defect module from consecutive hang event
+	  Detecting defect module from consecutive hang event
 
 config WLAN_VHTDISABLE
 	bool "WLAN Disable 11ac"
 	depends on BCM43456
 	default n
 	---help---
-	This is a configuration to disable 11ac.
+	  This is a configuration to disable 11ac.
 
 config WLAN_5GDISABLE
 	bool "Enable to block Band A(5G)"
 	depends on BROADCOM_WIFI
 	default n
 	---help---
-	This is configuration for block band A
+	  This is configuration for block band A

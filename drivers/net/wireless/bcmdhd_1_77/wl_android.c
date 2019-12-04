@@ -24,7 +24,7 @@
  *
  * <<Broadcom-WL-IPTag/Open:>>
  *
- * $Id: wl_android.c 752839 2018-03-19 07:05:21Z $
+ * $Id: wl_android.c 755150 2018-04-02 08:14:47Z $
  */
 
 #include <linux/module.h>
@@ -635,11 +635,6 @@ extern int set_roamscan_channel_list(struct net_device *dev, unsigned char n,
 #ifdef ROAM_CHANNEL_CACHE
 extern void wl_update_roamscan_cache_by_band(struct net_device *dev, int band);
 #endif /* ROAM_CHANNEL_CACHE */
-
-#ifdef APSTA_RESTRICTED_CHANNEL
-extern s32 wl_cfg80211_set_indoor_channels(struct net_device *ndev, char *command, int total_len);
-extern s32 wl_cfg80211_get_indoor_channels(struct net_device *ndev, char *command, int total_len);
-#endif /* APSTA_RESTRICTED_CHANNEL */
 
 #ifdef ENABLE_4335BT_WAR
 extern int bcm_bt_lock(int cookie);
@@ -4428,10 +4423,6 @@ wl_android_set_roampref(struct net_device *dev, char *command, int total_len)
 
 	total_len_left -= (num_akm_suites * WIDTH_AKM_SUITE);
 	num_ucipher_suites = simple_strtoul(pcmd, NULL, 16);
-	if (num_ucipher_suites > MAX_NUM_SUITES) {
-		DHD_ERROR(("too many cipher suits = %d.\n", num_ucipher_suites));
-		return BCME_ERROR;
-	}
 	/* Increment for number of cipher suites field + space */
 	pcmd += 3;
 	total_len_left -= 3;
@@ -5931,6 +5922,7 @@ wl_android_set_adps_mode(struct net_device *dev, const char* string_num)
 #endif	/* DHD_PM_CONTROL_FROM_FILE */
 
 	adps_mode = bcm_atoi(string_num);
+	WL_ERR(("%s: SET_ADPS %d\n", __func__, adps_mode));
 
 	if ((adps_mode < 0) && (1 < adps_mode)) {
 		WL_ERR(("%s: Invalid value %d.\n", __func__, adps_mode));
@@ -5961,7 +5953,7 @@ wl_android_get_adps_mode(
 
 	memset(&iov_buf, 0, sizeof(iov_buf));
 
-	len = OFFSETOF(bcm_iov_buf_t, data) + sizeof(*data);
+	len = OFFSETOF(bcm_iov_buf_t, data) + sizeof(band);
 
 	iov_buf.version = WL_ADPS_IOV_VER;
 	iov_buf.len = sizeof(band);

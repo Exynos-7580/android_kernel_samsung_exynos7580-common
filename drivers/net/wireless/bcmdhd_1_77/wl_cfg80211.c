@@ -24,7 +24,7 @@
  *
  * <<Broadcom-WL-IPTag/Open:>>
  *
- * $Id: wl_cfg80211.c 750863 2018-03-08 09:19:36Z $
+ * $Id: wl_cfg80211.c 755941 2018-04-05 12:14:54Z $
  */
 /* */
 #include <typedefs.h>
@@ -3711,7 +3711,7 @@ bcm_cfg80211_add_ibss_if(struct wiphy *wiphy, char *name)
 	/* generate a new MAC address for the IBSS interface */
 	get_primary_mac(cfg, &cfg->ibss_if_addr);
 	cfg->ibss_if_addr.octet[4] ^= 0x40;
-	memset(&aibss_if, 0, sizeof(aibss_if));
+	memset(&aibss_if, sizeof(aibss_if), 0);
 	memcpy(&aibss_if.addr, &cfg->ibss_if_addr, sizeof(aibss_if.addr));
 	aibss_if.chspec = 0;
 	aibss_if.len = sizeof(aibss_if);
@@ -8272,6 +8272,9 @@ wl_cfg80211_set_channel(struct wiphy *wiphy, struct net_device *dev,
 	defined(APSTA_RESTRICTED_CHANNEL))
 	dhd_pub_t *dhd =  (dhd_pub_t *)(cfg->pub);
 #endif /* CUSTOM_SET_CPUCORE || (WL_VIRTUAL_APSTA && APSTA_RESTRICTED_CHANNEL) */
+#if defined(WL_VIRTUAL_APSTA) && defined(APSTA_RESTRICTED_CHANNEL)
+	struct net_device *prmry_ndev = bcmcfg_to_prmry_ndev(cfg);
+#endif /* WL_VIRTUAL_APSTA && APSTA_RESTRICTED_CHANNEL */
 
 	dev = ndev_to_wlc_ndev(dev, cfg);
 	_chan = ieee80211_frequency_to_channel(chan->center_freq);
@@ -8300,11 +8303,22 @@ wl_cfg80211_set_channel(struct wiphy *wiphy, struct net_device *dev,
 #define DEFAULT_5G_SOFTAP_CHANNEL	149
 	if (wl_get_mode_by_netdev(cfg, dev) == WL_MODE_AP &&
 		DHD_OPMODE_STA_SOFTAP_CONCURR(dhd) &&
-		wl_get_drv_status(cfg, CONNECTED, bcmcfg_to_prmry_ndev(cfg))) {
+		wl_get_drv_status(cfg, CONNECTED, prmry_ndev)) {
 		u32 *sta_chan = (u32 *)wl_read_prof(cfg,
-			bcmcfg_to_prmry_ndev(cfg), WL_PROF_CHAN);
+			prmry_ndev, WL_PROF_CHAN);
+
 #ifdef WL_RESTRICTED_APSTA_SCC
 		_chan = *sta_chan;
+
+		/* Check if current channel is restricted */
+		if (wl_cfg80211_check_indoor_channels(prmry_ndev, _chan)) {
+			wl_cfg80211_disassoc(prmry_ndev);
+			WL_ERR(("Force to disconnect existing AP as "
+				"channel %d is indoor channel\n", _chan));
+
+			/* Set channel to default 2.4GHz channel */
+			_chan = DEFAULT_2G_SOFTAP_CHANNEL;
+		}
 #else
 		u32 sta_band = (*sta_chan > CH_MAX_2G_CHANNEL) ?
 			IEEE80211_BAND_5GHZ : IEEE80211_BAND_2GHZ;
@@ -12370,6 +12384,19 @@ s32 wl_cfg80211_get_bss_info(struct net_device *dev, char* cmd, int total_len)
 
 #endif /* DHD_ENABLE_BIGDATA_LOGGING */
 
+void wl_cfg80211_disassoc(struct net_device *ndev)
+{
+	scb_val_t scbval;
+	s32 err;
+
+	memset(&scbval, 0x0, sizeof(scb_val_t));
+	scbval.val = htod32(WLAN_REASON_DEAUTH_LEAVING);
+	err = wldev_ioctl_set(ndev, WLC_DISASSOC, &scbval, sizeof(scb_val_t));
+	if (err < 0) {
+		WL_ERR(("WLC_DISASSOC error %d\n", err));
+	}
+}
+
 #ifdef DHD_PM_CONTROL_FROM_FILE
 extern bool g_pm_control;
 #endif /* DHD_PM_CONTROL_FROM_FILE */
@@ -13737,10 +13764,6 @@ wl_notify_pfn_status(struct bcm_cfg80211 *cfg, bcm_struct_cfgdev *cfgdev,
 	u32 event = be32_to_cpu(e->event_type);
 	struct wiphy *wiphy = bcmcfg_to_wiphy(cfg);
 #endif /* GSCAN_SUPPORT */
-	if (!data) {
-		WL_ERR(("Data received is NULL!\n"));
-		return 0;
-	}
 
 	WL_ERR((">>> PNO Event\n"));
 
@@ -15084,21 +15107,13 @@ wl_cfg80211_netdev_notifier_call(struct notifier_block * nb,
 #else
 	struct net_device *dev = netdev_notifier_info_to_dev(ptr);
 #endif /* LINUX_VERSION < VERSION(3, 11, 0) */
-	struct wireless_dev *wdev;
-	struct bcm_cfg80211 *cfg;
+	struct wireless_dev *wdev = ndev_to_wdev(dev);
+	struct bcm_cfg80211 *cfg = wl_get_cfg(dev);
 
 	WL_DBG(("Enter \n"));
 
-	if (!dev || !dev->ieee80211_ptr)
+	if (!wdev || !cfg || dev == bcmcfg_to_prmry_ndev(cfg))
 		return NOTIFY_DONE;
-
-	cfg = wl_get_cfg(dev);
-	if (!cfg || dev == bcmcfg_to_prmry_ndev(cfg))
-		return NOTIFY_DONE;
-
-	wdev = dev->ieee80211_ptr;
-
-	pr_info("%s: handling state %lu\n", __func__, state);
 
 	switch (state) {
 		case NETDEV_DOWN:
@@ -22572,11 +22587,110 @@ static void wl_irq_set_work_handler(struct work_struct * work)
 #define BAND5G_CHANNELS_BLOCK_OP1	999
 #define BAND5G_CHANNELS_BLOCK_OP2	-1
 
+bool
+wl_cfg80211_check_indoor_channels(struct net_device *ndev, int channel)
+{
+	uint i = 0;
+	struct bcm_cfg80211 *cfg = wl_get_cfg(ndev);
+	dhd_pub_t *dhdp = (dhd_pub_t *)(cfg->pub);
+	wl_block_ch_t *block_ch = NULL;
+	int data_len = WLC_IOCTL_SMLEN;
+	bool ret = FALSE;
+
+	/* Get operation */
+	block_ch = (wl_block_ch_t *)MALLOCZ(dhdp->osh, data_len);
+	if (block_ch == NULL) {
+		WL_ERR(("Fail to allocate memory\n"));
+		goto exit;
+	}
+
+	if (wl_cfg80211_read_indoor_channels(ndev, block_ch, data_len) < 0) {
+		WL_ERR(("Failed to read indoor channels\n"));
+		goto exit;
+	}
+
+	if (block_ch->channel_num) {
+		for (i = 0; i < block_ch->channel_num; i++) {
+			if (channel == block_ch->channel[i]) {
+				WL_ERR(("channel %d is in the indoor "
+					"channel list\n", channel));
+				ret = TRUE;
+				break;
+			}
+		}
+	}
+
+exit:
+	if (block_ch) {
+		MFREE(dhdp->osh, block_ch, data_len);
+	}
+
+	return ret;
+}
+
+s32
+wl_cfg80211_read_indoor_channels(struct net_device *ndev, void *buf, int buflen)
+{
+	struct bcm_cfg80211 *cfg = wl_get_cfg(ndev);
+	dhd_pub_t *dhdp = (dhd_pub_t *)(cfg->pub);
+	wl_block_ch_t *iov_buf = NULL;
+	wl_block_ch_t *block_ch = NULL;
+	int data_len = 0;
+	int err = BCME_OK;
+
+	if (!dhdp) {
+		WL_ERR(("dhdp is NULL\n"));
+		return BCME_ERROR;
+	}
+
+	if (buflen < WLC_IOCTL_SMLEN) {
+		WL_ERR(("Buf is too short, buflen=%d\n", buflen));
+		return BCME_BUFTOOSHORT;
+	}
+
+	data_len = OFFSETOF(wl_block_ch_t, channel);
+	iov_buf = (wl_block_ch_t *)MALLOCZ(dhdp->osh, data_len);
+	if (iov_buf == NULL) {
+		WL_ERR(("Fail to allocate memory\n"));
+		err = BCME_NOMEM;
+		goto exit;
+	}
+
+	iov_buf->version = WL_BLOCK_CHANNEL_VER_1;
+	iov_buf->len = data_len;
+	iov_buf->band = WF_CHAN_FACTOR_5_G;
+	iov_buf->channel_num = 0;
+
+	err = wldev_iovar_getbuf(ndev, CMD_BLOCK_CH, iov_buf, data_len,
+		cfg->ioctl_buf, WLC_IOCTL_SMLEN, &cfg->ioctl_buf_sync);
+	if (err < 0) {
+		WL_ERR(("Setting block_ch failed with err=%d \n", err));
+		goto exit;
+	}
+
+	block_ch = (wl_block_ch_t *)(cfg->ioctl_buf);
+	if (block_ch->version != WL_BLOCK_CHANNEL_VER_1) {
+		WL_ERR(("Version mismatched! actual %d expected: %d\n",
+			block_ch->version, WL_BLOCK_CHANNEL_VER_1));
+		err = BCME_ERROR;
+	} else {
+		memcpy(buf, cfg->ioctl_buf, WLC_IOCTL_SMLEN);
+	}
+
+exit:
+	if (iov_buf) {
+		MFREE(dhdp->osh, iov_buf, data_len);
+	}
+
+	return err;
+}
+
 s32
 wl_cfg80211_set_indoor_channels(struct net_device *ndev, char *command, int total_len)
 {
 	uint i = 0, j = 0;
 	struct bcm_cfg80211 *cfg = wl_get_cfg(ndev);
+	struct net_device *prmry_ndev = bcmcfg_to_prmry_ndev(cfg);
 	dhd_pub_t *dhdp = (dhd_pub_t *)(cfg->pub);
 	wl_block_ch_t *block_ch = NULL;
 	int block_ch_len = 0;
@@ -22652,7 +22766,6 @@ wl_cfg80211_set_indoor_channels(struct net_device *ndev, char *command, int tota
 		err = BCME_NOMEM;
 		goto exit;
 	}
-	memset(block_ch, 0, block_ch_len);
 
 	block_ch->version = WL_BLOCK_CHANNEL_VER_1;
 	block_ch->len = block_ch_len;
@@ -22688,6 +22801,11 @@ wl_cfg80211_set_indoor_channels(struct net_device *ndev, char *command, int tota
 		}
 	}
 
+	/* Abort any association before setting block channel */
+	if (wl_get_drv_status(cfg, CONNECTING, prmry_ndev)) {
+		wl_cfg80211_disassoc(prmry_ndev);
+	}
+
 	/* Setting block channel list to fw */
 	if ((err = wldev_iovar_setbuf(ndev, CMD_BLOCK_CH, block_ch, block_ch->len,
 		cfg->ioctl_buf, WLC_IOCTL_SMLEN,  &cfg->ioctl_buf_sync))) {
@@ -22710,42 +22828,27 @@ wl_cfg80211_get_indoor_channels(struct net_device *ndev, char *command, int tota
 	uint i = 0;
 	struct bcm_cfg80211 *cfg = wl_get_cfg(ndev);
 	dhd_pub_t *dhdp = (dhd_pub_t *)(cfg->pub);
-	wl_block_ch_t *iov_buf = NULL;
 	wl_block_ch_t *block_ch = NULL;
-	int data_len = 0;
+	int data_len = WLC_IOCTL_SMLEN;
 	int err = BCME_OK;
 	char *pos;
 
 	pos = command;
-	/* Get operation */
 
-	data_len = OFFSETOF(wl_block_ch_t, channel);
-	iov_buf = (wl_block_ch_t *)MALLOCZ(dhdp->osh, data_len);
-	if (iov_buf == NULL) {
+	/* Get operation */
+	block_ch = (wl_block_ch_t *)MALLOCZ(dhdp->osh, data_len);
+	if (block_ch == NULL) {
 		WL_ERR(("Fail to allocate memory\n"));
 		err = BCME_NOMEM;
 		goto exit;
 	}
-	memset(iov_buf, 0, data_len);
 
-	iov_buf->version = WL_BLOCK_CHANNEL_VER_1;
-	iov_buf->len = data_len;
-	iov_buf->band = WF_CHAN_FACTOR_5_G;
-	iov_buf->channel_num = 0;
-
-	if ((err = wldev_iovar_getbuf(ndev, CMD_BLOCK_CH, iov_buf, data_len,
-		cfg->ioctl_buf, WLC_IOCTL_SMLEN,  &cfg->ioctl_buf_sync)) < 0) {
-		WL_ERR(("Setting block_ch failed with err=%d \n", err));
+	err = wl_cfg80211_read_indoor_channels(ndev, block_ch, data_len);
+	if (err < 0) {
+		WL_ERR(("Failed to read indoor channels, err=%d\n", err));
 		goto exit;
 	}
-	block_ch = (wl_block_ch_t *)cfg->ioctl_buf;
 
-	if (block_ch->version != WL_BLOCK_CHANNEL_VER_1) {
-		WL_ERR(("Version mismatched! actual %d expected: %d\n",
-			block_ch->version, WL_BLOCK_CHANNEL_VER_1));
-		err = BCME_ERROR;
-		goto exit;
-	}
 	if (block_ch->channel_num) {
 		pos += snprintf(pos, total_len, "%d ", block_ch->channel_num);
 		for (i = 0; i < block_ch->channel_num; i++) {
@@ -22753,11 +22856,12 @@ wl_cfg80211_get_indoor_channels(struct net_device *ndev, char *command, int tota
 		}
 		err = (pos - command);
 	}
+
 exit:
-	if (iov_buf) {
-		MFREE(dhdp->osh, iov_buf, data_len);
+	if (block_ch) {
+		MFREE(dhdp->osh, block_ch, data_len);
 	}
+
 	return err;
 }
-
 #endif /* APSTA_RESTRICTED_CHANNEL */

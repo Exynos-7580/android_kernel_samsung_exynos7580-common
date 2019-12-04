@@ -24,7 +24,7 @@
  *
  * <<Broadcom-WL-IPTag/Open:>>
  *
- * $Id: wl_cfg80211.h 750618 2018-03-07 11:14:10Z $
+ * $Id: wl_cfg80211.h 755941 2018-04-05 12:14:54Z $
  */
 
 /**
@@ -1808,6 +1808,7 @@ int wl_cfg80211_iface_count(struct net_device *dev);
 struct net_device* wl_get_ap_netdev(struct bcm_cfg80211 *cfg, char *ifname);
 struct net_device* wl_get_netdev_by_name(struct bcm_cfg80211 *cfg, char *ifname);
 int wl_cfg80211_get_vndr_ouilist(struct bcm_cfg80211 *cfg, uint8 *buf, int max_cnt);
+void wl_cfg80211_disassoc(struct net_device *ndev);
 #ifdef SUPPORT_SET_CAC
 extern int wl_cfg80211_enable_cac(struct net_device *dev, int enable);
 #endif /* SUPPORT_SET_CAC */
@@ -1827,4 +1828,10 @@ static inline int wl_abort_scan_and_check(struct bcm_cfg80211 *cfg)
 	return TRUE;
 }
 #endif /* DHD_ABORT_SCAN_CREATE_INTERFACE */
+#ifdef APSTA_RESTRICTED_CHANNEL
+extern s32 wl_cfg80211_set_indoor_channels(struct net_device *ndev, char *command, int total_len);
+extern s32 wl_cfg80211_get_indoor_channels(struct net_device *ndev, char *command, int total_len);
+extern s32 wl_cfg80211_read_indoor_channels(struct net_device *ndev, void *buf, int buflen);
+extern bool wl_cfg80211_check_indoor_channels(struct net_device *ndev, int channel);
+#endif /* APSTA_RESTRICTED_CHANNEL */
 #endif /* _wl_cfg80211_h_ */
