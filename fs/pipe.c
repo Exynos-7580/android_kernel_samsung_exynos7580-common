@@ -465,18 +465,11 @@ redo:
 			continue;
 		if (!pipe->writers)
 			break;
-		if (!pipe->waiting_writers) {
-			/* syscall merging: Usually we must not sleep
-			 * if O_NONBLOCK is set, or if we got some data.
-			 * But if a writer sleeps in kernel space, then
-			 * we can wait for that data without violating POSIX.
-			 */
-			if (ret)
-				break;
-			if (filp->f_flags & O_NONBLOCK) {
-				ret = -EAGAIN;
-				break;
-			}
+		if (ret)
+			break;
+		if (filp->f_flags & O_NONBLOCK) {
+			ret = -EAGAIN;
+			break;
 		}
 		if (signal_pending(current)) {
 			if (!ret)
@@ -671,9 +664,7 @@ redo2:
 			kill_fasync(&pipe->fasync_readers, SIGIO, POLL_IN);
 			do_wakeup = 0;
 		}
-		pipe->waiting_writers++;
 		pipe_wait(pipe);
-		pipe->waiting_writers--;
 	}
 out:
 	__pipe_unlock(pipe);

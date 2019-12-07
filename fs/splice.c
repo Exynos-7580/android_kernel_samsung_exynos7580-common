@@ -254,9 +254,7 @@ ssize_t splice_to_pipe(struct pipe_inode_info *pipe,
 			do_wakeup = 0;
 		}
 
-		pipe->waiting_writers++;
 		pipe_wait(pipe);
-		pipe->waiting_writers--;
 	}
 
 	pipe_unlock(pipe);
@@ -883,7 +881,7 @@ int splice_from_pipe_next(struct pipe_inode_info *pipe, struct splice_desc *sd)
 		if (!pipe->writers)
 			return 0;
 
-		if (!pipe->waiting_writers && sd->num_spliced)
+		if (sd->num_spliced)
 			return 0;
 
 		if (sd->flags & SPLICE_F_NONBLOCK)
@@ -1823,11 +1821,9 @@ static int ipipe_prep(struct pipe_inode_info *pipe, unsigned int flags)
 		}
 		if (!pipe->writers)
 			break;
-		if (!pipe->waiting_writers) {
-			if (flags & SPLICE_F_NONBLOCK) {
-				ret = -EAGAIN;
-				break;
-			}
+		if (flags & SPLICE_F_NONBLOCK) {
+			ret = -EAGAIN;
+			break;
 		}
 		pipe_wait(pipe);
 	}
@@ -1868,9 +1864,7 @@ static int opipe_prep(struct pipe_inode_info *pipe, unsigned int flags)
 			ret = -ERESTARTSYS;
 			break;
 		}
-		pipe->waiting_writers++;
 		pipe_wait(pipe);
-		pipe->waiting_writers--;
 	}
 
 	pipe_unlock(pipe);
@@ -2050,13 +2044,6 @@ static int link_pipe(struct pipe_inode_info *ipipe,
 		len -= obuf->len;
 		i++;
 	} while (len);
-
-	/*
-	 * return EAGAIN if we have the potential of some data in the
-	 * future, otherwise just return 0
-	 */
-	if (!ret && ipipe->waiting_writers && (flags & SPLICE_F_NONBLOCK))
-		ret = -EAGAIN;
 
 	pipe_unlock(ipipe);
 	pipe_unlock(opipe);
